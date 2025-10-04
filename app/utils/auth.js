@@ -75,6 +75,31 @@ export async function updateProfilePicture(imageUri) {
   }
 }
 
+export async function updateProfile(firstName, lastName) {
+  try {
+    const credentials = await Keychain.getGenericPassword();
+    if (!credentials || !credentials.password) {
+      throw new Error('No token found');
+    }
+
+    const response = await axios.put(
+      `${API_BASE_URL}/auth/update-profile`,
+      { firstName, lastName },
+      {
+        headers: {
+          Authorization: `Bearer ${credentials.password}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    throw error;
+  }
+}
+
 export async function deleteAccount() {
   try {
     const credentials = await Keychain.getGenericPassword();

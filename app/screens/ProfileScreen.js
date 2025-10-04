@@ -11,9 +11,10 @@ import {
   ScrollView,
   Animated,
   Dimensions,
+  TextInput,
 } from 'react-native';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
-import { logout, getCurrentUser, updateProfilePicture, isAuthenticated, deleteAccount } from '../utils/auth';
+import { logout, getCurrentUser, updateProfilePicture, isAuthenticated, deleteAccount, updateProfile } from '../utils/auth';
 import socketService from '../utils/socketService';
 import callStateManager from '../utils/callStateManager';
 
@@ -27,6 +28,10 @@ export default function ProfileScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [updating, setUpdating] = useState(false);
 
   // Animation values for circles
   const circle1Anim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
@@ -89,6 +94,13 @@ export default function ProfileScreen({ navigation }) {
     try {
       const userData = await getCurrentUser();
       setUser(userData);
+      
+      // Initialize first and last name from the full name
+      if (userData?.name) {
+        const nameParts = userData.name.split(' ');
+        setFirstName(nameParts[0] || '');
+        setLastName(nameParts.slice(1).join(' ') || '');
+      }
     } catch (error) {
       console.error('Error fetching user data:', error);
       
@@ -243,6 +255,40 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  const handleEditProfile = () => {
+    setEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    // Reset to original values
+    if (user?.name) {
+      const nameParts = user.name.split(' ');
+      setFirstName(nameParts[0] || '');
+      setLastName(nameParts.slice(1).join(' ') || '');
+    }
+    setEditing(false);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!firstName.trim() || !lastName.trim()) {
+      Alert.alert('Error', 'First name and last name are required');
+      return;
+    }
+
+    try {
+      setUpdating(true);
+      const result = await updateProfile(firstName.trim(), lastName.trim());
+      setUser(result.user);
+      setEditing(false);
+      Alert.alert('Success', 'Profile updated successfully!');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   // Removed loading screen for smoother transitions
 
   // Show loading or empty state if no user data yet
@@ -299,13 +345,44 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Profile</Text>
-          <TouchableOpacity 
-            style={styles.editButton}
-            onPress={showImagePicker}
-            disabled={uploading}
-          >
-            <Text style={styles.editIcon}>✏️</Text>
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            {editing ? (
+              <>
+                <TouchableOpacity 
+                  style={[styles.headerButton, styles.cancelButton]}
+                  onPress={handleCancelEdit}
+                  disabled={updating}
+                >
+                  <Text style={styles.headerButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.headerButton, styles.saveButton]}
+                  onPress={handleSaveProfile}
+                  disabled={updating}
+                >
+                  <Text style={styles.headerButtonText}>
+                    {updating ? 'Saving...' : 'Save'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity 
+                  style={styles.editButton}
+                  onPress={handleEditProfile}
+                >
+                  <Text style={styles.editIcon}>✏️</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.editButton}
+                  onPress={showImagePicker}
+                  disabled={uploading}
+                >
+                  <Text style={styles.editIcon}>📷</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
         </View>
 
         {/* Profile Section */}
@@ -339,20 +416,42 @@ export default function ProfileScreen({ navigation }) {
         <View style={styles.infoCard}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>First Name</Text>
-            <View style={styles.inputField}>
-              <Text style={styles.inputText}>
-                {user?.name ? user.name.split(' ')[0] : 'No first name'}
-              </Text>
-            </View>
+            {editing ? (
+              <TextInput
+                style={[styles.inputField, styles.textInput]}
+                value={firstName}
+                onChangeText={setFirstName}
+                placeholder="Enter first name"
+                placeholderTextColor="#9CA3AF"
+                editable={!updating}
+              />
+            ) : (
+              <View style={styles.inputField}>
+                <Text style={styles.inputText}>
+                  {user?.name ? user.name.split(' ')[0] : 'No first name'}
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Last Name</Text>
-            <View style={styles.inputField}>
-              <Text style={styles.inputText}>
-                {user?.name ? user.name.split(' ').slice(1).join(' ') : 'No last name'}
-              </Text>
-            </View>
+            {editing ? (
+              <TextInput
+                style={[styles.inputField, styles.textInput]}
+                value={lastName}
+                onChangeText={setLastName}
+                placeholder="Enter last name"
+                placeholderTextColor="#9CA3AF"
+                editable={!updating}
+              />
+            ) : (
+              <View style={styles.inputField}>
+                <Text style={styles.inputText}>
+                  {user?.name ? user.name.split(' ').slice(1).join(' ') : 'No last name'}
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -473,6 +572,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   editButton: {
     width: 40,
     height: 40,
@@ -484,6 +588,24 @@ const styles = StyleSheet.create({
   editIcon: {
     fontSize: 16,
     color: '#fff',
+  },
+  headerButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#6B7280',
+  },
+  saveButton: {
+    backgroundColor: '#10B981',
+  },
+  headerButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   profileSection: {
     alignItems: 'center',
@@ -562,6 +684,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#374151",
     fontWeight: "500",
+  },
+  textInput: {
+    backgroundColor: "#fff",
+    borderColor: "#8B5CF6",
+    borderWidth: 2,
   },
   buttonContainer: {
     width: '100%',
