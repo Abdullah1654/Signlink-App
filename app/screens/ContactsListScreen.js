@@ -12,12 +12,14 @@ import {
   Dimensions,
   Modal,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { launchCamera } from 'react-native-image-picker';
 import contactsService from '../utils/contactsService';
 import socketService from '../utils/socketService';
 import { getCurrentUser } from '../utils/auth';
 import BottomNavigation from '../components/BottomNavigation';
+import { useToast } from '../utils/toastService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -35,7 +37,9 @@ export default function ContactsListScreen({ navigation }) {
   const [emailSuggestions, setEmailSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchingUsers, setSearchingUsers] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const searchTimeoutRef = useRef(null);
+  const { showSuccess, showError } = useToast();
 
   useEffect(() => {
     fetchContacts();
@@ -71,9 +75,23 @@ export default function ContactsListScreen({ navigation }) {
       setContacts(contactsData);
     } catch (error) {
       console.error('Error fetching contacts:', error);
-      Alert.alert('Error', 'Failed to fetch contacts');
+      showError('Failed to fetch contacts');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await Promise.all([
+        fetchContacts(),
+        fetchCurrentUser()
+      ]);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -130,7 +148,7 @@ export default function ContactsListScreen({ navigation }) {
 
   const handleAddContact = async () => {
     if (!newContactEmail.trim()) {
-      Alert.alert('Error', 'Please enter an email address');
+      showError('Please enter an email address');
       return;
     }
 
@@ -142,11 +160,11 @@ export default function ContactsListScreen({ navigation }) {
       setShowSuggestions(false);
       setEmailSuggestions([]);
       await fetchContacts();
-      Alert.alert('Success', 'Contact added successfully');
+      showSuccess('Contact added successfully');
     } catch (error) {
       console.error('Error adding contact:', error);
       const errorMessage = error.response?.data?.error || 'Failed to add contact';
-      Alert.alert('Error', errorMessage);
+      showError(errorMessage);
     } finally {
       setAddingContact(false);
     }
@@ -166,11 +184,11 @@ export default function ContactsListScreen({ navigation }) {
       setShowDeleteModal(false);
       setContactToDelete(null);
       await fetchContacts();
-      Alert.alert('Success', 'Contact deleted successfully');
+      showSuccess('Contact deleted successfully');
     } catch (error) {
       console.error('Error deleting contact:', error);
       const errorMessage = error.response?.data?.error || 'Failed to delete contact';
-      Alert.alert('Error', errorMessage);
+      showError(errorMessage);
     } finally {
       setDeletingContact(false);
     }
@@ -359,6 +377,16 @@ export default function ContactsListScreen({ navigation }) {
             keyExtractor={(item) => item.id.toString()}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.contactsList}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#7C01F6']}
+                tintColor="#7C01F6"
+                title="Pull to refresh"
+                titleColor="#9CA3AF"
+              />
+            }
           />
         )}
       </View>

@@ -17,6 +17,7 @@ import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { logout, getCurrentUser, updateProfilePicture, isAuthenticated, deleteAccount, updateProfile } from '../utils/auth';
 import socketService from '../utils/socketService';
 import callStateManager from '../utils/callStateManager';
+import { useToast } from '../utils/toastService';
 
 // Use the same API base URL as in auth.js
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://signlink-backend.onrender.com';
@@ -32,6 +33,7 @@ export default function ProfileScreen({ navigation }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [updating, setUpdating] = useState(false);
+  const { showSuccess, showError } = useToast();
 
   // Animation values for circles
   const circle1Anim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
@@ -106,7 +108,7 @@ export default function ProfileScreen({ navigation }) {
       
       // Only show error for non-authentication issues
       if (error.message !== 'No token found') {
-        Alert.alert('Error', 'Failed to fetch user data. Please try again.');
+        showError('Failed to fetch user data. Please try again.');
       }
       // Don't redirect automatically - let the user stay on the profile screen
     }
@@ -158,10 +160,10 @@ export default function ProfileScreen({ navigation }) {
           setUploading(true);
           const result = await updateProfilePicture(imageUri);
           setUser(result.user);
-          Alert.alert('Success', 'Profile picture updated successfully!');
+          showSuccess('Profile picture updated successfully!');
         } catch (error) {
           console.error('Error updating profile picture:', error);
-          Alert.alert('Error', 'Failed to update profile picture');
+          showError('Failed to update profile picture');
         } finally {
           setUploading(false);
         }
@@ -237,19 +239,13 @@ export default function ProfileScreen({ navigation }) {
       // Clear local storage and navigate to sign in
       await logout(navigation);
       
-      Alert.alert(
-        'Account Deleted',
-        'Your account has been successfully deleted.',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.replace('SignIn')
-          }
-        ]
-      );
+      showSuccess('Account deleted successfully');
+      setTimeout(() => {
+        navigation.replace('SignIn');
+      }, 1500);
     } catch (error) {
       console.error('Error deleting account:', error);
-      Alert.alert('Error', 'Failed to delete account. Please try again.');
+      showError('Failed to delete account. Please try again.');
     } finally {
       setDeleting(false);
     }
@@ -271,7 +267,7 @@ export default function ProfileScreen({ navigation }) {
 
   const handleSaveProfile = async () => {
     if (!firstName.trim() || !lastName.trim()) {
-      Alert.alert('Error', 'First name and last name are required');
+      showError('First name and last name are required');
       return;
     }
 
@@ -280,10 +276,10 @@ export default function ProfileScreen({ navigation }) {
       const result = await updateProfile(firstName.trim(), lastName.trim());
       setUser(result.user);
       setEditing(false);
-      Alert.alert('Success', 'Profile updated successfully!');
+      showSuccess('Profile updated successfully!');
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
+      showError('Failed to update profile. Please try again.');
     } finally {
       setUpdating(false);
     }

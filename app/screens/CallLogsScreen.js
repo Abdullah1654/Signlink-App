@@ -7,6 +7,7 @@ import {
   FlatList,
   Image,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
 import contactsService from '../utils/contactsService';
 import BottomNavigation from '../components/BottomNavigation';
@@ -17,6 +18,7 @@ const { width, height } = Dimensions.get('window');
 export default function CallLogsScreen({ navigation }) {
   const [callLogs, setCallLogs] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchCallLogs();
@@ -29,6 +31,20 @@ export default function CallLogsScreen({ navigation }) {
       setCallLogs(logsData);
     } catch (error) {
       console.error('Error fetching call logs:', error);
+    }
+  };
+
+  const onRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await Promise.all([
+        fetchCallLogs(),
+        fetchCurrentUser()
+      ]);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -132,6 +148,21 @@ export default function CallLogsScreen({ navigation }) {
     }
   };
 
+  const getCallDirectionText = (status, isOutgoing) => {
+    switch (status) {
+      case 'completed':
+        return isOutgoing ? 'Outgoing' : 'Incoming';
+      case 'missed':
+        return 'Missed';
+      case 'rejected':
+        return isOutgoing ? 'Rejected' : 'Declined';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return isOutgoing ? 'Outgoing' : 'Incoming';
+    }
+  };
+
   const getCallStatusColor = (status) => {
     switch (status) {
       case 'completed':
@@ -148,7 +179,8 @@ export default function CallLogsScreen({ navigation }) {
   };
 
   const renderCallLog = ({ item: log }) => {
-    const isOutgoing = log.caller.id !== log.receiver.id; // This would need to be determined by current user
+    // Determine if current user was the caller or receiver
+    const isOutgoing = log.caller.id === currentUser?.id;
     const otherUser = isOutgoing ? log.receiver : log.caller;
     
     return (
@@ -168,7 +200,12 @@ export default function CallLogsScreen({ navigation }) {
           )}
           <View style={styles.callLogDetails}>
             <Text style={styles.callLogName}>{otherUser.name || 'Unknown'}</Text>
-            <Text style={styles.callLogTime}>{formatDate(log.startTime)}</Text>
+            <View style={styles.callLogInfoRow}>
+              <Text style={styles.callLogDirection}>
+                {getCallDirectionText(log.status, isOutgoing)}
+              </Text>
+              <Text style={styles.callLogTime}>{formatDate(log.startTime)}</Text>
+            </View>
           </View>
         </View>
         <View style={styles.callLogStatus}>
@@ -211,6 +248,16 @@ export default function CallLogsScreen({ navigation }) {
             keyExtractor={(item) => item.id.toString()}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.callLogsList}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#7C01F6']}
+                tintColor="#7C01F6"
+                title="Pull to refresh"
+                titleColor="#9CA3AF"
+              />
+            }
           />
         )}
       </View>
@@ -339,11 +386,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#F9FAFB',
-    marginBottom: 2,
+    marginBottom: 4,
+  },
+  callLogInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  callLogDirection: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
   callLogTime: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#8B5CF6',
+    fontWeight: '500',
   },
   callLogStatus: {
     alignItems: 'center',

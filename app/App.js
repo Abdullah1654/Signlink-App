@@ -6,6 +6,7 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import callStateManager from './utils/callStateManager';
 import { navigationRef } from './utils/navigationService';
 import IncomingCallModal from './components/IncomingCallModal';
+import { ToastProvider } from './utils/toastService';
 
 export default function App() {
   const [incomingCall, setIncomingCall] = useState(null);
@@ -44,21 +45,23 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer
-        ref={navigationRef}
-        onReady={() => {
-          console.log('Navigation container ready');
-          callStateManager.setNavigation(navigationRef);
-        }}
-      >
-        <AppNavigator />
-        <IncomingCallModal
-          visible={modalVisible}
-          caller={incomingCall?.caller}
-          onAccept={handleAcceptCall}
-          onReject={handleRejectCall}
-        />
-      </NavigationContainer>
+      <ToastProvider>
+        <NavigationContainer
+          ref={navigationRef}
+          onReady={() => {
+            console.log('Navigation container ready');
+            callStateManager.setNavigation(navigationRef);
+          }}
+        >
+          <AppNavigator />
+          <IncomingCallModal
+            visible={modalVisible}
+            caller={incomingCall?.caller}
+            onAccept={handleAcceptCall}
+            onReject={handleRejectCall}
+          />
+        </NavigationContainer>
+      </ToastProvider>
     </SafeAreaProvider>
   );
 }
