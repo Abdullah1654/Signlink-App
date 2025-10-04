@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SignLink</string>
+    <string name="media_pipe">MediaPipe</string>
+    <string name="alt_bottom_sheet_chevron">Bottom sheet expandable indicator</string>
+    <string name="inference_time_label">Inference Time</string>
+    <string name="delegate_label">Delegate</string>
+    <string name="no_value">--</string>
+    <string name="no_hands_detected">No Hands Detected</string>
+    <string name="none_gesture">None</string>
+    <string name="toggle_camera_button_desc">Toggle between front and back camera</string>
+    <string name="close_camera_button_desc">Close camera</string>
+    <string-array name="delegate_array">
+        <item>CPU</item>
+        <item>GPU</item>
+    </string-array>
+</resources>
