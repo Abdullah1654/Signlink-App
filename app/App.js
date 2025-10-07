@@ -6,11 +6,12 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import callStateManager from './utils/callStateManager';
 import { navigationRef } from './utils/navigationService';
 import IncomingCallModal from './components/IncomingCallModal';
-import { ToastProvider } from './utils/toastService';
+import { ToastProvider, useToast } from './utils/toastService';
 
-export default function App() {
+function AppContent() {
   const [incomingCall, setIncomingCall] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const { showInfo, showError, showSuccess } = useToast();
 
   useEffect(() => {
     GoogleSignin.configure({
@@ -21,15 +22,26 @@ export default function App() {
     // Set up modal callbacks for call state manager
     callStateManager.setModalCallbacks({
       showModal: (callData) => {
+        console.log('App: Showing modal for call:', callData);
         setIncomingCall(callData);
         setModalVisible(true);
       },
       hideModal: () => {
+        console.log('App: Hiding modal');
         setModalVisible(false);
         setIncomingCall(null);
       },
     });
-  }, []);
+
+    // Set up toast callbacks for call state manager
+    callStateManager.setToastCallbacks({
+      showInfo,
+      showError,
+      showSuccess,
+    });
+    
+    console.log('App: Call state manager callbacks set up');
+  }, [showInfo, showError, showSuccess]);
 
   const handleAcceptCall = () => {
     if (incomingCall) {
@@ -44,23 +56,29 @@ export default function App() {
   };
 
   return (
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={() => {
+        console.log('Navigation container ready');
+        callStateManager.setNavigation(navigationRef);
+      }}
+    >
+      <AppNavigator />
+      <IncomingCallModal
+        visible={modalVisible}
+        caller={incomingCall?.caller}
+        onAccept={handleAcceptCall}
+        onReject={handleRejectCall}
+      />
+    </NavigationContainer>
+  );
+}
+
+export default function App() {
+  return (
     <SafeAreaProvider>
       <ToastProvider>
-        <NavigationContainer
-          ref={navigationRef}
-          onReady={() => {
-            console.log('Navigation container ready');
-            callStateManager.setNavigation(navigationRef);
-          }}
-        >
-          <AppNavigator />
-          <IncomingCallModal
-            visible={modalVisible}
-            caller={incomingCall?.caller}
-            onAccept={handleAcceptCall}
-            onReject={handleRejectCall}
-          />
-        </NavigationContainer>
+        <AppContent />
       </ToastProvider>
     </SafeAreaProvider>
   );

@@ -17,6 +17,11 @@ class CallStateManager {
       showModal: null,
       hideModal: null,
     };
+    this.toastCallbacks = {
+      showInfo: null,
+      showError: null,
+      showSuccess: null,
+    };
   }
 
   setNavigation(navigation) {
@@ -29,6 +34,10 @@ class CallStateManager {
 
   setModalCallbacks(callbacks) {
     this.modalCallbacks = { ...this.modalCallbacks, ...callbacks };
+  }
+
+  setToastCallbacks(callbacks) {
+    this.toastCallbacks = { ...this.toastCallbacks, ...callbacks };
   }
 
   getCurrentRoute() {
@@ -172,6 +181,46 @@ class CallStateManager {
     } catch (error) {
       console.error('Error ending call:', error);
     }
+  }
+
+  // Handle missed call notifications
+  handleMissedCallNotification(data) {
+    console.log('Handling missed call notification:', data);
+    console.log('Modal callbacks available:', !!this.modalCallbacks.hideModal);
+    console.log('Toast callbacks available:', !!this.toastCallbacks?.showInfo);
+    
+    // Dismiss any incoming call modal/alert
+    if (this.modalCallbacks.hideModal) {
+      console.log('Dismissing incoming call modal');
+      this.modalCallbacks.hideModal();
+    } else {
+      console.log('No hideModal callback available');
+    }
+    this.modalVisible = false;
+    this.currentIncomingCall = null;
+    this.handledCalls.delete(data.callId);
+    
+    // Show toast notification for missed call
+    if (this.toastCallbacks && this.toastCallbacks.showInfo) {
+      console.log('Showing missed call toast notification');
+      this.toastCallbacks.showInfo(`Missed call from ${data.caller?.name || 'Unknown'}`, 5000);
+    } else {
+      console.log('No toast callback available');
+    }
+    this.notifyListeners('missed-call-notification', data);
+  }
+
+  // Handle call cancellation (when caller manually ends the call)
+  handleCallCancellation(data) {
+    console.log('Handling call cancellation:', data);
+    // Hide any incoming call modals/alerts
+    if (this.modalCallbacks.hideModal) {
+      this.modalCallbacks.hideModal();
+    }
+    this.modalVisible = false;
+    this.currentIncomingCall = null;
+    this.handledCalls.delete(data.callId);
+    this.notifyListeners('call-cancelled', data);
   }
 
   cleanup() {

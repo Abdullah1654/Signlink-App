@@ -906,6 +906,46 @@ const VideoCallScreen = () => {
         },
       },
       {
+        event: 'call-missed',
+        callback: (data) => {
+          if (data.callId === callId) {
+            console.log('Call missed:', data);
+            // For the caller, show a missed call message instead of reject modal
+            if (isInitiator) {
+              setCallStatus('missed');
+              callStatusRef.current = 'missed';
+              // Show missed call message and auto end call
+              setTimeout(() => {
+                endCall();
+              }, 2000);
+            } else {
+              // For the receiver, show reject modal
+              setShowRejectModal(true);
+              setTimeout(() => {
+                endCall();
+              }, 3000);
+            }
+          }
+        },
+      },
+      {
+        event: 'call-cancelled',
+        callback: (data) => {
+          if (data.callId === callId) {
+            console.log('Call cancelled:', data);
+            // For the receiver, the call was cancelled by the caller
+            if (!isInitiator) {
+              setCallStatus('cancelled');
+              callStatusRef.current = 'cancelled';
+              // Auto end call after showing cancelled message
+              setTimeout(() => {
+                endCall();
+              }, 2000);
+            }
+          }
+        },
+      },
+      {
         event: 'webrtc-offer',
         callback: (data) => {
           console.log('Received webrtc-offer:', data);
@@ -1037,8 +1077,20 @@ const VideoCallScreen = () => {
       ringing: 'Ringing...',
       connecting: 'Connecting...',
       connected: formatDuration(callDuration),
+      missed: 'Call Missed',
+      cancelled: 'Call Cancelled',
     };
     return statusText[callStatus];
+  };
+
+  const getCallStatusStyle = () => {
+    if (callStatus === 'missed') {
+      return [styles.timer, styles.missedCallText];
+    }
+    if (callStatus === 'cancelled') {
+      return [styles.timer, styles.cancelledCallText];
+    }
+    return styles.timer;
   };
 
   return (
@@ -1130,7 +1182,7 @@ const VideoCallScreen = () => {
       {/* Top Section - User Name and Timer */}
       <View style={styles.topSection}>
         <Text style={styles.userName}>{contact.name}</Text>
-        <Text style={styles.timer}>{renderCallStatus()}</Text>
+        <Text style={getCallStatusStyle()}>{renderCallStatus()}</Text>
       </View>
       
       {/* Bottom Controls */}
@@ -1248,6 +1300,16 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
+  },
+  missedCallText: {
+    color: '#EF4444',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  cancelledCallText: {
+    color: '#F59E0B',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   controlsContainer: { 
     position: 'absolute', 

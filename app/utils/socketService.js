@@ -97,6 +97,17 @@ class SocketService {
       callStateManager.handleIncomingCall(data);
     });
 
+    // Handle missed call notifications
+    this.socket.on('call-missed', (data) => {
+      console.log('Call missed:', data);
+      callStateManager.notifyListeners('call-missed', data);
+    });
+
+    this.socket.on('missed-call-notification', (data) => {
+      console.log('Missed call notification:', data);
+      callStateManager.handleMissedCallNotification(data);
+    });
+
     // Add global WebRTC listeners to handle offers/answers for any call
     this.socket.on('webrtc-offer', (data) => {
       console.log('🔔 Global WebRTC offer received:', data);
@@ -265,3 +276,5 @@ class SocketService {
 }
 
 export default new SocketService();
+
+
