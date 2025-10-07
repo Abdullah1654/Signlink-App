@@ -108,6 +108,12 @@ class SocketService {
       callStateManager.handleMissedCallNotification(data);
     });
 
+    // Handle call cancellation (when caller manually ends the call)
+    this.socket.on('call-cancelled', (data) => {
+      console.log('🔔 Global call-cancelled event received:', data);
+      callStateManager.handleCallCancellation(data);
+    });
+
     // Add global WebRTC listeners to handle offers/answers for any call
     this.socket.on('webrtc-offer', (data) => {
       console.log('🔔 Global WebRTC offer received:', data);

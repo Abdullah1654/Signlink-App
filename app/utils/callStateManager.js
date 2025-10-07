@@ -213,9 +213,15 @@ class CallStateManager {
   // Handle call cancellation (when caller manually ends the call)
   handleCallCancellation(data) {
     console.log('Handling call cancellation:', data);
+    console.log('Modal callbacks available:', !!this.modalCallbacks.hideModal);
+    console.log('Current incoming call:', this.currentIncomingCall);
+    
     // Hide any incoming call modals/alerts
     if (this.modalCallbacks.hideModal) {
+      console.log('Dismissing incoming call modal due to cancellation');
       this.modalCallbacks.hideModal();
+    } else {
+      console.log('No hideModal callback available for cancellation');
     }
     this.modalVisible = false;
     this.currentIncomingCall = null;
