@@ -268,6 +268,16 @@ class SocketService {
     console.log('Sent gesture data to:', targetUserId, gestureData);
   }
 
+  // Speech message transmission methods
+  sendSpeechMessage(targetUserId, messageData) {
+    if (!this.isSocketConnected()) {
+      console.error('Socket not connected, cannot send speech message');
+      return;
+    }
+    this.socket.emit('speech-message', { targetUserId, messageData });
+    console.log('Sent speech message to:', targetUserId, messageData);
+  }
+
   disconnect() {
     if (this.socket) {
       this.socket.disconnect();

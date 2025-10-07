@@ -107,7 +107,7 @@ export default function ConversationScreen({ navigation, route }) {
       if (user.photo.startsWith('http')) {
         return { uri: user.photo };
       } else {
-        return { uri: `${process.env.REACT_APP_API_BASE_URL || 'http://172.20.1.52:4000'}${user.photo}` };
+        return { uri: `${process.env.REACT_APP_API_BASE_URL || 'https://signlink-backend.onrender.com'}${user.photo}` };
       }
     }
     return require('../../photos/Logo.png');

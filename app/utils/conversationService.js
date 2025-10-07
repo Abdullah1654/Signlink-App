@@ -1,6 +1,6 @@
 import * as Keychain from 'react-native-keychain';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://172.20.1.52:4000';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://signlink-backend.onrender.com';
 
 class ConversationService {
   async getAuthHeaders() {
