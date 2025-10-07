@@ -5,8 +5,12 @@ import {
   Image,
   StyleSheet,
 } from 'react-native';
+import { useTheme, createThemedStyles } from '../utils/themeService';
 
 export default function SplashScreen({ navigation }) {
+  const { theme } = useTheme();
+  const styles = createThemedStyles(getStyles)(theme);
+
   useEffect(() => {
     // Navigate to SignIn screen after 3 seconds
     const timer = setTimeout(() => {
@@ -33,10 +37,10 @@ export default function SplashScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#121111",
+    backgroundColor: theme.colors.background,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -71,7 +75,7 @@ const styles = StyleSheet.create({
   brandName: {
     fontSize: 32,
     fontWeight: "800", // Extra bold
-    color: "#fff",
+    color: theme.colors.text,
     fontFamily: "Poppins-ExtraBold", // Poppins font
     letterSpacing: 2,
   },

@@ -15,6 +15,7 @@ import {
 import axios from "axios";
 import * as Keychain from 'react-native-keychain';
 import GoogleSignInButton from "../components/GoogleSignInButton";
+import { useTheme, createThemedStyles } from '../utils/themeService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,6 +31,8 @@ export default function SignUpScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const { theme } = useTheme();
+  const styles = createThemedStyles(getStyles)(theme);
 
   // Animation values for circles
   const circle1Anim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
@@ -294,10 +297,10 @@ export default function SignUpScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: "#121111" 
+    backgroundColor: theme.colors.background 
   },
   circle1: {
     position: 'absolute',
@@ -360,25 +363,25 @@ const styles = StyleSheet.create({
   title: { 
     fontSize: 32, 
     fontWeight: "bold", 
-    color: "#fff" 
+    color: theme.colors.text 
   },
   subtitle: { 
     fontSize: 14, 
-    color: "#ccc", 
+    color: theme.colors.textSecondary, 
     marginTop: 10,
   },
   signInText: { 
-    color: "#8B5CF6", 
+    color: theme.colors.primary, 
     fontWeight: "bold" 
   },
   form: {
-    backgroundColor: "#fff",
+    backgroundColor: theme.colors.card,
     marginHorizontal: 20,
     borderRadius: 15,
     padding: 20,
     zIndex: 10,
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadow,
     shadowOffset: {
       width: 0,
       height: 4,
@@ -402,37 +405,37 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#374151",
+    color: theme.colors.text,
     marginBottom: 6,
     marginLeft: 4,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#eee",
-    backgroundColor: "#F9FAFB",
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.inputBackground,
     padding: 12,
     borderRadius: 10,
     fontSize: 13,
     fontWeight: "500",
-    color: "#575459",
+    color: theme.colors.text,
   },
   inputFull: {
     borderWidth: 1,
-    borderColor: "#eee",
-    backgroundColor: "#F9FAFB",
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.inputBackground,
     padding: 12,
     borderRadius: 10,
     fontSize: 13,
     fontWeight: "500",
-    color: "#575459",
+    color: theme.colors.text,
     height: 50,
 
   },
   inputError: { 
-    borderColor: "#EF4444" 
+    borderColor: theme.colors.error 
   },
   error: { 
-    color: "#EF4444", 
+    color: theme.colors.error, 
     fontSize: 12, 
     marginLeft: 4,
     marginTop: 4,
@@ -451,7 +454,7 @@ const styles = StyleSheet.create({
     height: 20,
   },
   button: {
-    backgroundColor: "#8B5CF6",
+    backgroundColor: theme.colors.buttonPrimary,
     padding: 14,
     borderRadius: 10,
     alignItems: "center",
@@ -459,7 +462,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   buttonDisabled: {
-    backgroundColor: '#A78BFA',
+    backgroundColor: theme.colors.primaryLight,
   },
   buttonText: { 
     color: "#fff", 
@@ -474,10 +477,10 @@ const styles = StyleSheet.create({
   orLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: theme.colors.border,
   },
   or: { 
-    color: "#666", 
+    color: theme.colors.textMuted, 
     marginHorizontal: 15,
     fontSize: 14,
   },

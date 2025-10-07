@@ -4,11 +4,14 @@ import { mediaDevices, RTCView, RTCPeerConnection } from 'react-native-webrtc';
 import socketService from '../utils/socketService';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import RejectCallModal from '../components/RejectCallModal';
+import { useTheme, createThemedStyles } from '../utils/themeService';
 
 const VideoCallScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { contact, callId, isInitiator } = route.params;
+  const { theme } = useTheme();
+  const styles = createThemedStyles(getStyles)(theme);
 
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
@@ -1258,10 +1261,10 @@ const VideoCallScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#000' 
+    backgroundColor: theme.colors.background 
   },
   remoteVideo: { 
     flex: 1 
@@ -1285,19 +1288,19 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   userName: {
-    color: '#fff',
+    color: theme.name === 'dark' ? '#fff' : '#000',
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowColor: theme.name === 'dark' ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
   timer: {
-    color: '#fff',
+    color: theme.name === 'dark' ? '#fff' : '#000',
     fontSize: 18,
     fontWeight: '500',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowColor: theme.name === 'dark' ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
@@ -1322,7 +1325,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   controlButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: theme.name === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
     padding: 15,
     borderRadius: 30,
     marginHorizontal: 15,
@@ -1331,7 +1334,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: theme.name === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)',
   },
   controlButtonActive: { 
     backgroundColor: 'rgba(231, 76, 60, 0.8)',
@@ -1362,7 +1365,7 @@ const styles = StyleSheet.create({
   controlIcon: {
     width: 24,
     height: 24,
-    tintColor: '#fff',
+    tintColor: theme.name === 'dark' ? '#fff' : '#000',
   },
   controlIconMuted: {
     tintColor: '#e74c3c',

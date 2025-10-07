@@ -1,12 +1,15 @@
 import React from 'react';
 import { View, TouchableOpacity, Image, StyleSheet, Dimensions } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useTheme, createThemedStyles } from '../utils/themeService';
 
 const { width } = Dimensions.get('window');
 
 export default function BottomNavigation() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { theme } = useTheme();
+  const styles = createThemedStyles(getStyles)(theme);
 
   const getActiveRoute = () => {
     return route.name;
@@ -73,7 +76,7 @@ export default function BottomNavigation() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   floatingBottomNavigation: {
     position: 'absolute',
     bottom: 30,
@@ -87,8 +90,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     borderRadius: 55,
-    backgroundColor: '#222', // Fallback for gradient
-    shadowColor: '#000',
+    backgroundColor: theme.colors.surface,
+    shadowColor: theme.colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 19,
@@ -104,9 +107,9 @@ const styles = StyleSheet.create({
   navIcon: {
     width: 28,
     height: 28,
-    tintColor: '#9CA3AF', // Dimmed color for inactive
+    tintColor: theme.colors.textMuted, // Dimmed color for inactive
   },
   activeNavIcon: {
-    tintColor: '#8B5CF6', // Purple color for active
+    tintColor: theme.colors.primary, // Primary color for active
   },
 });

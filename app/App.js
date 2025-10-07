@@ -7,6 +7,7 @@ import callStateManager from './utils/callStateManager';
 import { navigationRef } from './utils/navigationService';
 import IncomingCallModal from './components/IncomingCallModal';
 import { ToastProvider, useToast } from './utils/toastService';
+import { ThemeProvider } from './utils/themeService';
 
 function AppContent() {
   const [incomingCall, setIncomingCall] = useState(null);
@@ -77,9 +78,11 @@ function AppContent() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <ToastProvider>
-        <AppContent />
-      </ToastProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

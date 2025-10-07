@@ -18,6 +18,7 @@ import { logout, getCurrentUser, updateProfilePicture, isAuthenticated, deleteAc
 import socketService from '../utils/socketService';
 import callStateManager from '../utils/callStateManager';
 import { useToast } from '../utils/toastService';
+import { useTheme, createThemedStyles } from '../utils/themeService';
 
 // Use the same API base URL as in auth.js
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://signlink-backend.onrender.com';
@@ -34,6 +35,8 @@ export default function ProfileScreen({ navigation }) {
   const [lastName, setLastName] = useState('');
   const [updating, setUpdating] = useState(false);
   const { showSuccess, showError } = useToast();
+  const { theme, isDark, toggleTheme } = useTheme();
+  const styles = createThemedStyles(getStyles)(theme);
 
   // Animation values for circles
   const circle1Anim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
@@ -364,6 +367,14 @@ export default function ProfileScreen({ navigation }) {
             ) : (
               <>
                 <TouchableOpacity 
+                  style={styles.themeToggleButton}
+                  onPress={toggleTheme}
+                >
+                  <Text style={styles.themeToggleIcon}>
+                    {isDark ? '☀️' : '🌙'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
                   style={styles.editButton}
                   onPress={handleEditProfile}
                 >
@@ -484,10 +495,10 @@ export default function ProfileScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: "#121111" 
+    backgroundColor: theme.colors.background 
   },
   circle1: {
     position: 'absolute',
@@ -541,7 +552,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#ccc',
+    color: theme.colors.textSecondary,
   },
   header: {
     flexDirection: 'row',
@@ -560,24 +571,36 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     fontSize: 24,
-    color: '#fff',
+    color: theme.colors.text,
     fontWeight: 'bold',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
+    color: theme.colors.text,
   },
   headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
+  themeToggleButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  themeToggleIcon: {
+    fontSize: 18,
+    color: '#fff',
+  },
   editButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -593,10 +616,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#6B7280',
+    backgroundColor: theme.colors.buttonSecondary,
   },
   saveButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: theme.colors.buttonSuccess,
   },
   headerButtonText: {
     color: '#fff',
@@ -617,7 +640,7 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 4,
-    borderColor: '#fff',
+    borderColor: theme.colors.text,
   },
   uploadingOverlay: {
     position: 'absolute',
@@ -625,7 +648,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: theme.colors.overlay,
     borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
@@ -633,24 +656,24 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: theme.colors.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   userEmail: {
     fontSize: 16,
-    color: '#ccc',
+    color: theme.colors.textSecondary,
     textAlign: 'center',
   },
   infoCard: {
-    backgroundColor: "#fff",
+    backgroundColor: theme.colors.card,
     marginHorizontal: 20,
     borderRadius: 15,
     padding: 20,
     marginTop: 20,
     zIndex: 10,
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadow,
     shadowOffset: {
       width: 0,
       height: 4,
@@ -664,13 +687,13 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#374151",
+    color: theme.colors.text,
     marginBottom: 8,
   },
   inputField: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#F9FAFB",
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.inputBackground,
     padding: 12,
     borderRadius: 10,
     minHeight: 50,
@@ -678,12 +701,12 @@ const styles = StyleSheet.create({
   },
   inputText: {
     fontSize: 16,
-    color: "#374151",
+    color: theme.colors.text,
     fontWeight: "500",
   },
   textInput: {
-    backgroundColor: "#fff",
-    borderColor: "#8B5CF6",
+    backgroundColor: theme.colors.inputBackground,
+    borderColor: theme.colors.inputBorderFocused,
     borderWidth: 2,
   },
   buttonContainer: {
@@ -691,17 +714,17 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   button: {
-    backgroundColor: "#8B5CF6",
+    backgroundColor: theme.colors.buttonPrimary,
     padding: 14,
     borderRadius: 10,
     alignItems: "center",
     marginBottom: 12,
   },
   logoutButton: {
-    backgroundColor: "#FF3B30",
+    backgroundColor: theme.colors.buttonDanger,
   },
   deleteButton: {
-    backgroundColor: "#FF0000",
+    backgroundColor: theme.colors.error,
   },
   buttonText: { 
     color: "#fff", 
@@ -712,11 +735,11 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: '#fff',
+    borderColor: theme.colors.text,
   },
   defaultProfileText: {
     fontSize: 48,
@@ -729,7 +752,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: theme.colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,

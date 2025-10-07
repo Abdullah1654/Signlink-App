@@ -11,12 +11,15 @@ import {
 import uuid from 'react-native-uuid';
 import contactsService from '../utils/contactsService';
 import socketService from '../utils/socketService';
+import { useTheme, createThemedStyles } from '../utils/themeService';
 
 const { width, height } = Dimensions.get('window');
 
 export default function ConversationScreen({ navigation, route }) {
   const { contact } = route.params;
   const [callHistory, setCallHistory] = useState([]);
+  const { theme } = useTheme();
+  const styles = createThemedStyles(getStyles)(theme);
 
   useEffect(() => {
     fetchCallHistory();
@@ -198,10 +201,10 @@ export default function ConversationScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#121111"
+    backgroundColor: theme.colors.background
   },
   circle: {
     position: 'absolute',
@@ -229,7 +232,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#ccc',
+    color: theme.colors.textSecondary,
   },
   header: {
     flexDirection: 'row',
@@ -247,7 +250,7 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     fontSize: 24,
-    color: '#fff',
+    color: theme.colors.text,
     fontWeight: 'bold',
   },
   contactInfo: {
@@ -265,7 +268,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
@@ -281,7 +284,7 @@ const styles = StyleSheet.create({
   contactName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: theme.colors.text,
     marginBottom: 2,
   },
   statusContainer: {
@@ -308,19 +311,19 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: theme.colors.text,
     marginBottom: 15,
   },
   callHistoryList: {
     paddingBottom: 20,
   },
   callHistoryItem: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.card,
     borderRadius: 15,
     padding: 15,
     marginBottom: 10,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -339,12 +342,12 @@ const styles = StyleSheet.create({
   callHistoryTime: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#374151',
+    color: theme.colors.text,
     marginBottom: 2,
   },
   callHistoryDuration: {
     fontSize: 14,
-    color: '#6B7280',
+    color: theme.colors.textSecondary,
   },
   emptyContainer: {
     flex: 1,
@@ -354,12 +357,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: theme.colors.text,
     marginBottom: 5,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#ccc',
+    color: theme.colors.textSecondary,
   },
   bottomCallContainer: {
     paddingHorizontal: 20,

@@ -12,6 +12,7 @@ import {
 import contactsService from '../utils/contactsService';
 import BottomNavigation from '../components/BottomNavigation';
 import { getCurrentUser } from '../utils/auth';
+import { useTheme, createThemedStyles } from '../utils/themeService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -19,6 +20,8 @@ export default function CallLogsScreen({ navigation }) {
   const [callLogs, setCallLogs] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const { theme } = useTheme();
+  const styles = createThemedStyles(getStyles)(theme);
 
   useEffect(() => {
     fetchCallLogs();
@@ -268,10 +271,10 @@ export default function CallLogsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#121111"
+    backgroundColor: theme.colors.background
   },
   circle: {
     position: 'absolute',
@@ -302,7 +305,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#F9FAFB',
+    color: theme.colors.text,
   },
   profileButton: {
     position: 'relative',
@@ -316,7 +319,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -334,7 +337,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#10B981',
     borderWidth: 2,
-    borderColor: '#121111',
+    borderColor: theme.colors.background,
   },
   callLogsContainer: {
     flex: 1,
@@ -346,8 +349,8 @@ const styles = StyleSheet.create({
   callLogItem: {
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#444',
-    backgroundColor: '#1F1F1F',
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.card,
     padding: 15,
     marginBottom: 10,
     flexDirection: 'row',
@@ -369,7 +372,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
@@ -385,7 +388,7 @@ const styles = StyleSheet.create({
   callLogName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#F9FAFB',
+    color: theme.colors.text,
     marginBottom: 4,
   },
   callLogInfoRow: {
@@ -395,12 +398,12 @@ const styles = StyleSheet.create({
   },
   callLogDirection: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: theme.colors.textSecondary,
     fontWeight: '500',
   },
   callLogTime: {
     fontSize: 12,
-    color: '#8B5CF6',
+    color: theme.colors.primary,
     fontWeight: '500',
   },
   callLogStatus: {
@@ -417,12 +420,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: theme.colors.text,
     marginBottom: 5,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#ccc',
+    color: theme.colors.textSecondary,
   },
 });
 

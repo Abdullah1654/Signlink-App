@@ -11,10 +11,13 @@ import {
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import NavigatorModule from '../utils/NavigatorModule';
 import BottomNavigation from '../components/BottomNavigation';
+import { useTheme, createThemedStyles } from '../utils/themeService';
 
 const CameraMenuScreen = ({ navigation }) => {
   const [hasPermission, setHasPermission] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const { theme } = useTheme();
+  const styles = createThemedStyles(getStyles)(theme);
 
   useEffect(() => {
     const ensureCameraPermission = async () => {
@@ -54,7 +57,7 @@ const CameraMenuScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#121111" />
+      <StatusBar barStyle={theme.name === 'dark' ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
       
       <View style={styles.circle} />
       
@@ -87,10 +90,10 @@ const CameraMenuScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121111',
+    backgroundColor: theme.colors.background,
   },
   circle: {
     position: 'absolute',
@@ -101,6 +104,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(124, 1, 246, 0.64)',
     opacity: 0.21,
     shadowColor: '#7C01F6',
+    filter: 'blur(99px)',
     shadowOffset: {
       width: 0,
       height: 0,
@@ -120,7 +124,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#F9FAFB',
+    color: theme.colors.text,
   },
   content: {
     flex: 1,
@@ -133,21 +137,21 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   cameraButton: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: theme.colors.primary,
     paddingHorizontal: 40,
     paddingVertical: 20,
     borderRadius: 25,
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
   disabledButton: {
-    backgroundColor: '#4B5563',
+    backgroundColor: theme.colors.buttonSecondary,
   },
   cameraButtonText: {
-    color: '#F9FAFB',
+    color: theme.colors.text,
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
@@ -157,7 +161,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 16,
-    color: '#9CA3AF',
+    color: theme.colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
   },

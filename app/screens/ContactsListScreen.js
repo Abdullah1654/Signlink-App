@@ -20,6 +20,7 @@ import socketService from '../utils/socketService';
 import { getCurrentUser } from '../utils/auth';
 import BottomNavigation from '../components/BottomNavigation';
 import { useToast } from '../utils/toastService';
+import { useTheme, createThemedStyles } from '../utils/themeService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -40,6 +41,8 @@ export default function ContactsListScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const searchTimeoutRef = useRef(null);
   const { showSuccess, showError } = useToast();
+  const { theme } = useTheme();
+  const styles = createThemedStyles(getStyles)(theme);
 
   useEffect(() => {
     fetchContacts();
@@ -550,10 +553,10 @@ export default function ContactsListScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#121111" // Static dark background
+    backgroundColor: theme.colors.background
   },
   circle: {
     position: 'absolute',
@@ -584,7 +587,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#F9FAFB',
+    color: theme.colors.text,
   },
   profileButton: {
     width: 50,
@@ -600,17 +603,17 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     borderWidth: 2,
-    borderColor: '#374151',
+    borderColor: theme.colors.border,
   },
   defaultCurrentUserProfileContainer: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#374151',
+    borderColor: theme.colors.border,
   },
   defaultCurrentUserProfileText: {
     fontSize: 20,
@@ -641,7 +644,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderRadius: 25,
-    backgroundColor: '#1F1F1F',
+    backgroundColor: theme.colors.surface,
   },
   searchIcon: {
     width: 20,
@@ -651,7 +654,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#F9FAFB',
+    color: theme.colors.text,
   },
   filterContainer: {
     paddingHorizontal: 20,
@@ -690,13 +693,13 @@ const styles = StyleSheet.create({
   contactCard: {
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#444',
-    backgroundColor: '#1F1F1F', // Fallback for gradient
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.card,
     padding: 15,
     marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -729,19 +732,19 @@ const styles = StyleSheet.create({
   contactName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#F9FAFB',
+    color: theme.colors.text,
     marginBottom: 4,
   },
   contactPreview: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: theme.colors.textSecondary,
   },
   contactTimeContainer: {
     alignItems: 'flex-end',
   },
   contactTime: {
     fontSize: 12,
-    color: '#8B5CF6',
+    color: theme.colors.primary,
     fontWeight: '500',
   },
   emptyContainer: {
@@ -752,12 +755,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#F9FAFB',
+    color: theme.colors.text,
     marginBottom: 5,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: theme.colors.textSecondary,
   },
   floatingAddButton: {
     position: 'absolute',
@@ -794,7 +797,7 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   modalContent: {
-    backgroundColor: '#121111',
+    backgroundColor: theme.colors.background,
     borderRadius: 30,
     padding: 20,
     width: '80%',
@@ -803,7 +806,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#F9FAFB',
+    color: theme.colors.text,
     marginBottom: 15,
     textAlign: 'center',
   },
@@ -811,12 +814,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#4B5563',
-    backgroundColor: '#1F1F1F',
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.inputBackground,
     borderRadius: 10,
     paddingHorizontal: 12,
     marginBottom: 15,
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadow,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.02,
     shadowRadius: 22,
@@ -832,7 +835,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 12,
     fontSize: 16,
-    color: '#F9FAFB',
+    color: theme.colors.text,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -849,7 +852,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4B5563',
   },
   cancelButtonText: {
-    color: '#F9FAFB',
+    color: theme.colors.text,
     fontWeight: '600',
   },
   addContactButton: {
@@ -861,7 +864,7 @@ const styles = StyleSheet.create({
   },
   deleteModalText: {
     fontSize: 16,
-    color: '#9CA3AF',
+    color: theme.colors.textSecondary,
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 22,

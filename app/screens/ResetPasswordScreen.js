@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, TextInput, Button, Alert, StyleSheet, Text, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Dimensions, Animated, Keyboard } from 'react-native';
 import axios from 'axios';
+import { useTheme, createThemedStyles } from '../utils/themeService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -14,6 +15,8 @@ export default function ResetPasswordScreen({ route, navigation }) {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const { theme } = useTheme();
+  const styles = createThemedStyles(getStyles)(theme);
 
   // Animation values for circles
   const circle1Anim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
@@ -240,10 +243,10 @@ export default function ResetPasswordScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: "#121111" 
+    backgroundColor: theme.colors.background 
   },
   circle1: {
     position: 'absolute',
