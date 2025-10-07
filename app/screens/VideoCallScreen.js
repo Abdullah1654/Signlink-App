@@ -842,9 +842,8 @@ const VideoCallScreen = () => {
         
         if (isConnected) {
           console.log('Sending speech sentence to remote:', numberedSentence);
-          socketService.sendGestureData(contact.id, { 
-            text: numberedSentence,
-            type: 'sentence'
+          socketService.sendSpeechMessage(contact.id, { 
+            text: numberedSentence
           });
         }
         
@@ -1015,6 +1014,25 @@ const VideoCallScreen = () => {
             }
           } else {
             console.log('Gesture data not from expected contact. Expected:', contact.id, 'Got:', data.fromUserId);
+          }
+        },
+      },
+      {
+        event: 'speech-message',
+        callback: (data) => {
+          console.log('Received speech message:', data);
+          if (data.fromUserId === contact.id) {
+            console.log('Processing speech message from contact:', contact.id, 'Text:', data.messageData.text);
+            
+            // Handle speech message
+            setRemoteSentence(data.messageData.text);
+            setRemoteSentenceHistory(prev => {
+              const updated = [...prev, data.messageData.text];
+              return updated.slice(-MAX_DISPLAYED_SENTENCES);
+            });
+            console.log('Received remote speech message:', data.messageData.text);
+          } else {
+            console.log('Speech message not from expected contact. Expected:', contact.id, 'Got:', data.fromUserId);
           }
         },
       },
