@@ -12,7 +12,7 @@ export async function getCurrentUser() {
       throw new Error('No token found');
     }
 
-    const response = await axios.get(`${API_BASE_URL}/me`, {
+  const response = await axios.get(`${API_BASE_URL}/auth/me`, {
       headers: {
         Authorization: `Bearer ${credentials.password}`,
       },

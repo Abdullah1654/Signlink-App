@@ -52,7 +52,7 @@ class ContactsService {
     try {
       const headers = await this.getAuthHeaders();
       const response = await axios.get(
-        `${API_BASE_URL}/call-logs`,
+        `${API_BASE_URL}/calls/logs`,
         { headers }
       );
       return response.data.callLogs;
@@ -66,7 +66,7 @@ class ContactsService {
     try {
       const headers = await this.getAuthHeaders();
       const response = await axios.get(
-        `${API_BASE_URL}/call-logs/${contactId}`,
+        `${API_BASE_URL}/calls/logs/${contactId}`,
         { headers }
       );
       return response.data.callLogs;
@@ -94,7 +94,7 @@ class ContactsService {
     try {
       const headers = await this.getAuthHeaders();
       const response = await axios.get(
-        `${API_BASE_URL}/users/search?q=${encodeURIComponent(query)}`,
+        `${API_BASE_URL}/contacts/search?q=${encodeURIComponent(query)}`,
         { headers }
       );
       return response.data.users;
