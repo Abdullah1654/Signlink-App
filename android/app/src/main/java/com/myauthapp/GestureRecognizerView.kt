@@ -185,6 +185,10 @@ class GestureRecognizerView @JvmOverloads constructor(
             binding?.let { b ->
                 gestureRecognizerResultAdapter?.updateResults(resultBundle.results.first().gestures())
                 val gesture = gestureRecognizerResultAdapter?.getTopGestureName() ?: "No Hands Detected"
+                
+                // Update fixed gesture status line
+                b.tvCurrentGesture?.text = gesture
+                
                 b.bottomSheetLayout.inferenceTimeVal.text = String.format("%d ms", resultBundle.inferenceTime)
                 b.overlay.setResults(resultBundle.results.first(), resultBundle.inputImageHeight, resultBundle.inputImageWidth, RunningMode.LIVE_STREAM)
                 b.viewFinder.setBackgroundColor(
@@ -203,6 +207,7 @@ class GestureRecognizerView @JvmOverloads constructor(
         post {
             showToast(error)
             gestureRecognizerResultAdapter?.updateResults(null)
+            binding?.tvCurrentGesture?.text = "No Hands Detected"
             binding?.viewFinder?.setBackgroundColor(Color.TRANSPARENT)
             if (errorCode == GestureRecognizerHelper.GPU_ERROR) {
                 binding?.bottomSheetLayout?.spinnerDelegate?.setSelection(GestureRecognizerHelper.DELEGATE_CPU, false)

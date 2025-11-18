@@ -12,6 +12,96 @@ import java.util.Locale
 import com.myauthapp.databinding.ItemGestureRecognizerResultBinding
 
 class GestureRecognizerResultsAdapter(private val context: Context) : RecyclerView.Adapter<GestureRecognizerResultsAdapter.ViewHolder>() {
+    // Gemini API key (keep this secure in production)
+    private val GEMINI_API_KEY = "AIzaSyAYQWM3Sjvip1h2VcViEj_qsn6-hQp0zHg"
+    // Default model the user prefers
+    private val GEMINI_MODEL_PRIMARY = "gemini-2.0-flash"
+    // Fallback for broader availability
+    private val GEMINI_MODEL_FALLBACK = "gemini-2.5-flash-lite"
+
+    private fun modelEndpoint(model: String): String {
+        // gemini-2.0 and 2.5 models typically on v1beta at time of writing
+        val base = if (model.startsWith("gemini-2.")) "https://generativelanguage.googleapis.com/v1beta/models/" else "https://generativelanguage.googleapis.com/v1/models/"
+        return base + model + ":generateContent?key=" + GEMINI_API_KEY
+    }
+
+    // Prevent duplicate finalization and duplicate API calls
+    private var isFinalizing = false
+    private var inFlightGemini = false
+    private var pendingGeminiIndex: Int? = null
+
+    // Function to call Gemini API and get a meaningful sentence
+    private fun getMeaningfulSentence(rawSentence: String, callback: (String) -> Unit) {
+        Thread {
+            try {
+                val prompt = "You are turning raw gesture words into an easy-to-read sentence. Keep it concise and grammatical. Raw: $rawSentence"
+                // Build JSON using org.json to avoid escaping issues (which can cause HTTP 400)
+                val part = org.json.JSONObject().put("text", prompt)
+                val content = org.json.JSONObject()
+                    .put("role", "user")
+                    .put("parts", org.json.JSONArray().put(part))
+                val genConfig = org.json.JSONObject()
+                    .put("temperature", 0.7)
+                    .put("topK", 40)
+                    .put("topP", 0.95)
+                    .put("maxOutputTokens", 64)
+                val body = org.json.JSONObject()
+                    .put("contents", org.json.JSONArray().put(content))
+                    .put("generationConfig", genConfig)
+
+                fun callOnce(model: String): Pair<Int, String> {
+                    val url = java.net.URL(modelEndpoint(model))
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 10000
+                    conn.readTimeout = 15000
+                    conn.requestMethod = "POST"
+                    conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    conn.doOutput = true
+                    conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                    val status = conn.responseCode
+                    val stream = if (status in 200..299) conn.inputStream else conn.errorStream
+                    val response = stream?.bufferedReader()?.readText() ?: ""
+                    return status to response
+                }
+
+                // Try primary then fallback on 400/404
+                var (status, response) = callOnce(GEMINI_MODEL_PRIMARY)
+                if (status == 400 || status == 404) {
+                    Log.w(TAG, "Primary model $GEMINI_MODEL_PRIMARY returned $status; trying fallback $GEMINI_MODEL_FALLBACK")
+                    val res2 = callOnce(GEMINI_MODEL_FALLBACK)
+                    status = res2.first
+                    response = res2.second
+                }
+
+                if (status !in 200..299) {
+                    Log.e(TAG, "Gemini HTTP $status: $response")
+                    // Try to parse error message
+                    val errMsg = try {
+                        val eroot = org.json.JSONObject(response)
+                        eroot.optJSONObject("error")?.optString("message")
+                    } catch (e: Exception) { null }
+                    callback("[Gemini HTTP $status${if (!errMsg.isNullOrBlank()) ": $errMsg" else ""}]")
+                    return@Thread
+                }
+
+                // Parse: candidates[0].content.parts[0].text
+                val text = try {
+                    val root = org.json.JSONObject(response)
+                    val candidates = root.optJSONArray("candidates")
+                    val first = candidates?.optJSONObject(0)
+                    val contentObj = first?.optJSONObject("content")
+                    val parts = contentObj?.optJSONArray("parts")
+                    parts?.optJSONObject(0)?.optString("text")?.replace("\n", " ")?.trim()
+                } catch (pe: Exception) {
+                    null
+                }
+                callback(text?.ifBlank { null } ?: "[No content from Gemini]")
+            } catch (e: Exception) {
+                Log.e(TAG, "Gemini API error", e)
+                callback("[Gemini error]")
+            }
+        }.start()
+    }
     companion object {
         private const val TAG = "GestureAdapter"
         private const val NO_VALUE = "--"
@@ -26,6 +116,8 @@ class GestureRecognizerResultsAdapter(private val context: Context) : RecyclerVi
     }
 
     private var adapterCategories: MutableList<Category?> = mutableListOf(null)
+    private var currentGesture: String = "No Hands Detected"
+    private var currentScore: Float = 0f
     private val gestureHistory = mutableListOf<String>()
     private val sentenceGestures = mutableListOf<String>()
     private val sentences = mutableListOf<String>()
@@ -34,6 +126,8 @@ class GestureRecognizerResultsAdapter(private val context: Context) : RecyclerVi
     private var noHandsStartTime: Long? = null
     private var ttsHelper: TtsHelper? = null
     var onSentenceUpdate: ((String) -> Unit)? = null
+    // Allow single-word sentences to pass
+    private val MIN_SENTENCE_ALPHA_CHARS = 1
     
     init {
         ttsHelper = TtsHelper(context)
@@ -59,24 +153,10 @@ class GestureRecognizerResultsAdapter(private val context: Context) : RecyclerVi
                 gesture = NO_HANDS
                 score = 0f
             } else {
+                // Simply take the top gesture, whether it's from one hand or two hands
                 val topCategory = flattenedCategories.firstOrNull()
-                if (categories.size == 2 && topCategory?.categoryName()?.startsWith("TwoHand_") == true) {
-                    gesture = cleanGestureName(topCategory.categoryName())
-                    score = topCategory.score()
-                } else if (categories.size == 1) {
-                    gesture = cleanGestureName(topCategory?.categoryName())
-                    score = topCategory?.score()
-                } else {
-                    val firstHandTop = categories[0].filter { it.score() >= MIN_CONFIDENCE }.maxByOrNull { it.score() }
-                    val secondHandTop = categories[1].filter { it.score() >= MIN_CONFIDENCE }.maxByOrNull { it.score() }
-                    if (firstHandTop != null && secondHandTop != null && firstHandTop.categoryName() == secondHandTop.categoryName()) {
-                        gesture = cleanGestureName(firstHandTop.categoryName())
-                        score = firstHandTop.score()
-                    } else {
-                        gesture = NONE_GESTURE
-                        score = 0f
-                    }
-                }
+                gesture = cleanGestureName(topCategory?.categoryName())
+                score = topCategory?.score()
             }
         }
 
@@ -85,25 +165,66 @@ class GestureRecognizerResultsAdapter(private val context: Context) : RecyclerVi
         val smoothedGesture = gestureHistory.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key ?: NO_HANDS
         Log.d(TAG, "Detected gesture: $smoothedGesture, Score: $score, History: $gestureHistory")
 
+        // Store current gesture for external access (used by View)
+        currentGesture = smoothedGesture
+        currentScore = score ?: 0f
+
         if (smoothedGesture == NO_HANDS) {
             if (noHandsStartTime == null && isBuildingSentence && sentenceGestures.isNotEmpty()) {
                 noHandsStartTime = currentTime
                 Log.d(TAG, "Started No Hands Detected timer at $noHandsStartTime")
             }
-            if (noHandsStartTime != null && currentTime - noHandsStartTime!! >= NO_HANDS_TIMEOUT_MS && isBuildingSentence && sentenceGestures.isNotEmpty()) {
+            if (!isFinalizing && noHandsStartTime != null && currentTime - noHandsStartTime!! >= NO_HANDS_TIMEOUT_MS && isBuildingSentence && sentenceGestures.isNotEmpty()) {
+                isFinalizing = true
                 val newSentence = getFormattedSentence()
-                sentences.add(newSentence)
-                Log.d(TAG, "Finalized sentence after 3s No Hands: $newSentence, All sentences: $sentences")
-                onSentenceUpdate?.invoke(newSentence)
-                adapterCategories = mutableListOf(Category.create(score ?: 0f, 0, smoothedGesture, smoothedGesture))
-                sentences.takeLast(MAX_DISPLAYED_SENTENCES).forEachIndexed { index, sentence ->
-                    adapterCategories.add(Category.create(1f, index + 1, sentence, sentence))
+                if (isTrivialSentence(newSentence)) {
+                    // Nothing to finalize; reset flags and bail out
+                    isFinalizing = false
+                    sentenceGestures.clear()
+                    isBuildingSentence = false
+                    noHandsStartTime = null
+                    return
                 }
+                // Show raw sentence immediately
+                sentences.add(newSentence)
+                pendingGeminiIndex = sentences.lastIndex
+                Log.d(TAG, "Finalized raw sentence: $newSentence, All sentences: $sentences")
+                notifyDataSetChanged()
+
+                // Reset builders before network call to avoid duplicates
                 sentenceGestures.clear()
                 isBuildingSentence = false
                 noHandsStartTime = null
-                Log.d(TAG, "Reset sentence-building state after finalization")
-                notifyDataSetChanged()
+
+                // If the finalized sentence is a single dot, do not call Gemini (as requested)
+                if (newSentence.trim() == ".") {
+                    Log.d(TAG, "Skipping Gemini call for single dot sentence")
+                    isFinalizing = false
+                    pendingGeminiIndex = null
+                } else if (!inFlightGemini) {
+                    inFlightGemini = true
+                    getMeaningfulSentence(newSentence) { geminiSentence ->
+                        (context as? android.app.Activity)?.runOnUiThread {
+                            // If model replied with a prompt request, keep raw sentence instead
+                            val cleanedGemini = if (isTrivialSentence(geminiSentence) || isPromptLike(geminiSentence)) newSentence else geminiSentence
+                            pendingGeminiIndex?.let { idx ->
+                                if (idx in sentences.indices) {
+                                    sentences[idx] = cleanedGemini
+                                } else {
+                                    sentences.add(cleanedGemini)
+                                }
+                            } ?: run {
+                                sentences.add(cleanedGemini)
+                            }
+                            Log.d(TAG, "[Gemini] Rewritten: $cleanedGemini, All sentences: $sentences")
+                            onSentenceUpdate?.invoke(cleanedGemini)
+                            notifyDataSetChanged()
+                            inFlightGemini = false
+                            isFinalizing = false
+                            pendingGeminiIndex = null
+                        }
+                    }
+                }
             }
         } else {
             noHandsStartTime = null
@@ -123,31 +244,31 @@ class GestureRecognizerResultsAdapter(private val context: Context) : RecyclerVi
                 }
             }
         }
-
-        if (adapterCategories.isEmpty() || adapterCategories[0]?.categoryName() != smoothedGesture) {
-            adapterCategories[0] = Category.create(score ?: 0f, 0, smoothedGesture, smoothedGesture)
-            notifyDataSetChanged()
-        }
     }
 
     fun getFormattedSentence(): String {
         if (sentenceGestures.isEmpty()) return ""
-        val sentence = sentenceGestures.joinToString(", ") { it.lowercase(Locale.US) }
-        return sentence.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() } + "."
+        val raw = sentenceGestures.joinToString(", ") { it.lowercase(Locale.US).trim() }
+        // If raw collapses to empty (no alphanumerics), treat as empty
+        val alphaCount = raw.count { it.isLetter() }
+        if (raw.isBlank() || alphaCount < MIN_SENTENCE_ALPHA_CHARS) return ""
+        // Normalize whitespace: collapse newlines and multiple spaces
+        val normalized = raw
+            .replace(Regex("\\n+"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .trim(',')
+        if (normalized.isBlank()) return ""
+        return normalized.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() } + "."
     }
 
-    fun getTopGestureName(): String = adapterCategories.getOrNull(0)?.categoryName() ?: NO_HANDS
+    fun getTopGestureName(): String = currentGesture
     
     @SuppressLint("NotifyDataSetChanged")
     fun addSpokenSentence(text: String) {
-        if (text.isNotEmpty()) {
+        if (text.isNotEmpty() && !isTrivialSentence(text)) {
             sentences.add(text)
             Log.d(TAG, "Added spoken sentence: $text, All sentences: $sentences")
-            // Update adapter categories to show new sentence
-            adapterCategories = mutableListOf(adapterCategories[0]) // Keep current gesture
-            sentences.takeLast(MAX_DISPLAYED_SENTENCES).forEachIndexed { index, sentence ->
-                adapterCategories.add(Category.create(1f, index + 1, sentence, sentence))
-            }
             notifyDataSetChanged()
         }
     }
@@ -160,36 +281,50 @@ class GestureRecognizerResultsAdapter(private val context: Context) : RecyclerVi
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        adapterCategories.getOrNull(position)?.let { category ->
-            Log.d(TAG, "Binding label: ${category.categoryName()}, isSentence: ${position >= 1}")
-            holder.bind(category.categoryName(), category.score(), position >= 1, if (position >= 1) sentences.size - (MAX_DISPLAYED_SENTENCES - position) else 0)
-        } ?: holder.bind(NO_VALUE, 0f, position >= 1, if (position >= 1) sentences.size - (MAX_DISPLAYED_SENTENCES - position) else 0)
+        // Only show sentences in RecyclerView now
+        val sentence = sentences.getOrNull(position)
+        holder.bind(sentence, position + 1)
     }
 
-    override fun getItemCount(): Int = adapterCategories.size
+    override fun getItemCount(): Int = sentences.size
 
     inner class ViewHolder(private val binding: ItemGestureRecognizerResultBinding) : RecyclerView.ViewHolder(binding.root) {
-        fun bind(label: String?, score: Float?, isSentence: Boolean, sentenceIndex: Int) {
+        fun bind(sentence: String?, sentenceIndex: Int) {
             with(binding) {
-                tvLabel.text = if (isSentence && sentenceIndex > 0) "${sentenceIndex}. ${label ?: NO_VALUE}" else (label ?: NO_VALUE)
-                tvScore.text = if (score != null && score > 0f && !isSentence) String.format(Locale.US, "%.2f", score) else ""
+                tvLabel.text = if (sentence != null) "${sentenceIndex}. $sentence" else NO_VALUE
+                tvScore.visibility = android.view.View.GONE // No scores for sentences
                 tvLabel.setTextColor(0xFF000000.toInt())
-                tvScore.setTextColor(0xFF000000.toInt())
-                tvLabel.setTypeface(null, if (isSentence) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
-                tvLabel.textSize = if (isSentence) 18f else 16f
+                tvLabel.setTypeface(null, android.graphics.Typeface.BOLD)
+                tvLabel.textSize = 18f
                 
-                // Show TTS button only for sentences
-                btnTts.visibility = if (isSentence && label != null && label.isNotEmpty()) 
+                // Show TTS button for valid sentences
+                btnTts.visibility = if (sentence != null && sentence.isNotEmpty()) 
                     android.view.View.VISIBLE else android.view.View.GONE
                 
                 // Set up TTS button click listener
                 btnTts.setOnClickListener {
-                    if (isSentence && label != null && label.isNotEmpty()) {
-                        val textToSpeak = label.replaceFirst(Regex("^\\d+\\.\\s*"), "")
-                        ttsHelper?.speak(textToSpeak)
+                    sentence?.let { text ->
+                        ttsHelper?.speak(text)
                     }
                 }
             }
         }
+    }
+
+    // Helpers
+    private fun isTrivialSentence(s: String?): Boolean {
+        if (s == null) return true
+        val trimmed = s.trim().trim('.')
+        if (trimmed.isBlank()) return true
+        val alpha = trimmed.count { it.isLetter() }
+        return alpha < MIN_SENTENCE_ALPHA_CHARS
+    }
+
+    private fun isPromptLike(s: String?): Boolean {
+        if (s == null) return false
+        val t = s.lowercase(Locale.US)
+        // Heuristics: model asking for more input
+        return (t.contains("please") || t.contains("provide") || t.contains("need")) &&
+               (t.contains("raw") || t.contains("words") || t.contains("input") || t.contains("gesture"))
     }
 }

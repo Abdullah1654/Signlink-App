@@ -1,24 +1,60 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   Image,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { useTheme, createThemedStyles } from '../utils/themeService';
+import { isAuthenticated, getCurrentUser } from '../utils/auth';
 
 export default function SplashScreen({ navigation }) {
   const { theme } = useTheme();
   const styles = createThemedStyles(getStyles)(theme);
+  const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    // Navigate to SignIn screen after 3 seconds
-    const timer = setTimeout(() => {
-      navigation.replace('SignIn');
-    }, 3000);
-
-    return () => clearTimeout(timer);
+    checkAuthenticationStatus();
   }, [navigation]);
+
+  const checkAuthenticationStatus = async () => {
+    try {
+      // Show splash screen for at least 2 seconds for better UX
+      const minSplashTime = new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Check if token exists in keychain
+      const hasToken = await isAuthenticated();
+      
+      if (hasToken) {
+        // Validate token with backend
+        try {
+          await getCurrentUser();
+          // Token is valid, wait for minimum splash time then navigate
+          await minSplashTime;
+          navigation.replace('ContactsList');
+        } catch (error) {
+          // Token exists but is invalid/expired
+          console.log('Token validation failed:', error.message);
+          await minSplashTime;
+          navigation.replace('SignIn');
+        }
+      } else {
+        // No token found
+        await minSplashTime;
+        navigation.replace('SignIn');
+      }
+    } catch (error) {
+      // Error checking authentication
+      console.error('Error checking authentication:', error);
+      // On error, navigate to SignIn to be safe
+      setTimeout(() => {
+        navigation.replace('SignIn');
+      }, 2000);
+    } finally {
+      setIsChecking(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -32,6 +68,15 @@ export default function SplashScreen({ navigation }) {
           style={styles.logo}
         />
         <Text style={styles.brandName}>SIGNLINK</Text>
+        
+        {/* Loading indicator */}
+        {isChecking && (
+          <ActivityIndicator 
+            size="large" 
+            color={theme.colors.primary} 
+            style={styles.loader}
+          />
+        )}
       </View>
     </View>
   );
@@ -78,5 +123,8 @@ const getStyles = (theme) => StyleSheet.create({
     color: theme.colors.text,
     fontFamily: "Poppins-ExtraBold", // Poppins font
     letterSpacing: 2,
+  },
+  loader: {
+    marginTop: 30,
   },
 });

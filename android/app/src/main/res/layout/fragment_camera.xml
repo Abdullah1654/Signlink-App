@@ -16,18 +16,45 @@
     <include
         android:id="@+id/bottom_sheet_layout"
         layout="@layout/info_bottom_sheet" />
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerview_results"
+    
+    <!-- Fixed container for gesture status and scrollable sentences -->
+    <LinearLayout
+        android:id="@+id/results_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
         android:layout_marginBottom="@dimen/bottom_sheet_peek_height"
         android:background="#FFF5F5F5"
-        android:clipToPadding="true"
+        android:orientation="vertical"
         android:padding="@dimen/bottom_sheet_padding"
         app:layout_anchor="@id/bottom_sheet_layout"
-        app:layout_anchorGravity="top"
-        app:layout_behavior="com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior" />
+        app:layout_anchorGravity="top">
+        
+        <!-- Fixed gesture status line (stays at top) -->
+        <TextView
+            android:id="@+id/tv_current_gesture"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#FF000000"
+            android:textSize="16sp"
+            android:paddingVertical="8dp"
+            android:text="No Hands Detected" />
+        
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/mp_color_primary" />
+        
+        <!-- Scrollable sentences area -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerview_results"
+            android:layout_width="match_parent"
+            android:layout_height="150dp"
+            android:scrollbars="vertical"
+            android:fadeScrollbars="false"
+            android:clipToPadding="false" />
+    </LinearLayout>
+    
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/toggle_camera_button"
         android:layout_width="wrap_content"
@@ -38,10 +65,4 @@
         android:contentDescription="@string/toggle_camera_button_desc"
         android:src="@drawable/ic_switch_camera"
         app:useCompatPadding="true" />
-    <View
-        android:layout_width="wrap_content"
-        android:layout_height="1dp"
-        android:background="@color/mp_color_primary"
-        app:layout_anchor="@id/recyclerview_results"
-        app:layout_anchorGravity="bottom" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
