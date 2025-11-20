@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  ScrollView,
   Animated,
   Dimensions,
   TextInput,
@@ -55,25 +54,31 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // Random movement animation for circles
+  // Consistent circular animation for both circles
   useEffect(() => {
-    const animateCircle = (animValue, duration) => {
-      const randomX = (Math.random() - 0.5) * 200; // Random movement within 200px
-      const randomY = (Math.random() - 0.5) * 200;
+    const circlePositions = [
+      { x: 0, y: 0 },
+      { x: 50, y: -50 },
+      { x: 100, y: 0 },
+      { x: 50, y: 50 },
+      { x: 0, y: 0 },
+    ];
+
+    const animateCircle = (animValue, currentIndex = 0) => {
+      const nextIndex = (currentIndex + 1) % circlePositions.length;
       
       Animated.timing(animValue, {
-        toValue: { x: randomX, y: randomY },
-        duration: duration,
+        toValue: circlePositions[nextIndex],
+        duration: 5000,
         useNativeDriver: true,
       }).start(() => {
-        // Continue animation with new random values
-        setTimeout(() => animateCircle(animValue, duration), 2000);
+        animateCircle(animValue, nextIndex);
       });
     };
 
     // Start animations for both circles
-    animateCircle(circle1Anim, 3000);
-    animateCircle(circle2Anim, 4000);
+    animateCircle(circle1Anim);
+    animateCircle(circle2Anim);
   }, []);
 
   // No automatic redirect - user stays on profile screen
@@ -327,7 +332,7 @@ export default function ProfileScreen({ navigation }) {
         ]} 
       />
       
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <View style={styles.contentContainer}>
         {deleting && (
           <View style={styles.deletingOverlay}>
             <ActivityIndicator size="large" color="#fff" />
@@ -337,13 +342,15 @@ export default function ProfileScreen({ navigation }) {
         
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profile</Text>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Text style={styles.backIcon}>←</Text>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Profile</Text>
+          </View>
           <View style={styles.headerButtons}>
             {editing ? (
               <>
@@ -489,7 +496,7 @@ export default function ProfileScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
+      </View>
 
     </View>
   );
@@ -502,11 +509,11 @@ const getStyles = (theme) => StyleSheet.create({
   },
   circle1: {
     position: 'absolute',
-    top: -210,
-    right: -105,
-    width: 420,
-    height: 420,
-    borderRadius: 210,
+    top: -175,
+    right: -87.5,
+    width: 350,
+    height: 350,
+    borderRadius: 175,
     backgroundColor: 'rgba(124, 1, 246, 0.40)',
     shadowColor: '#7C01F6',
     shadowOffset: {
@@ -536,11 +543,8 @@ const getStyles = (theme) => StyleSheet.create({
     elevation: 10,
     filter: 'blur(99px)',
   },
-  scrollView: {
+  contentContainer: {
     flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
     paddingBottom: 20,
     paddingTop: 20,
   },
@@ -559,9 +563,15 @@ const getStyles = (theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
+    paddingTop: 30,
+    paddingBottom: 20,
     backgroundColor: 'transparent',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
   },
   backButton: {
     width: 40,
@@ -570,12 +580,12 @@ const getStyles = (theme) => StyleSheet.create({
     alignItems: 'center',
   },
   backIcon: {
-    fontSize: 24,
+    fontSize: 28,
     color: theme.colors.text,
     fontWeight: 'bold',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: 'bold',
     color: theme.colors.text,
   },
@@ -666,7 +676,9 @@ const getStyles = (theme) => StyleSheet.create({
     textAlign: 'center',
   },
   infoCard: {
-    backgroundColor: theme.colors.card,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     marginHorizontal: 20,
     borderRadius: 15,
     padding: 20,
@@ -692,8 +704,8 @@ const getStyles = (theme) => StyleSheet.create({
   },
   inputField: {
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.inputBackground,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     padding: 12,
     borderRadius: 10,
     minHeight: 50,
@@ -705,20 +717,24 @@ const getStyles = (theme) => StyleSheet.create({
     fontWeight: "500",
   },
   textInput: {
-    backgroundColor: theme.colors.inputBackground,
-    borderColor: theme.colors.inputBorderFocused,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 2,
   },
   buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
     width: '100%',
-    marginTop: 20,
+    marginTop: 0,
+    marginBottom: 0,
   },
   button: {
+    flex: 1,
     backgroundColor: theme.colors.buttonPrimary,
     padding: 14,
     borderRadius: 10,
     alignItems: "center",
-    marginBottom: 12,
   },
   logoutButton: {
     backgroundColor: theme.colors.buttonDanger,

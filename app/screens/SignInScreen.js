@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TextInput, Button, Text, StyleSheet, Alert, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Dimensions, Animated, Keyboard } from 'react-native';
+import { View, TextInput, Button, Text, StyleSheet, Alert, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Dimensions, Animated, Keyboard, Easing } from 'react-native';
 import axios from 'axios';
 import * as Keychain from 'react-native-keychain';
 import GoogleSignInButton from '../components/GoogleSignInButton';
@@ -25,25 +25,39 @@ export default function SignInScreen({ navigation }) {
   const circle2Anim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const scrollViewRef = useRef(null);
 
-  // Random movement animation for circles
+  // Consistent circular movement animation for circles
   useEffect(() => {
-    const animateCircle = (animValue, duration) => {
-      const randomX = (Math.random() - 0.5) * 200; // Random movement within 200px
-      const randomY = (Math.random() - 0.5) * 200;
+    const positions = [
+      { x: 0, y: 0 },
+      { x: 50, y: -50 },
+      { x: 100, y: 0 },
+      { x: 50, y: 50 },
+      { x: 0, y: 0 },
+    ];
+    let currentIndex1 = 0;
+    let currentIndex2 = 2; // Start circle2 at different position for variety
+
+    const animateCircle = (animValue, indexRef) => {
+      const nextIndex = (indexRef + 1) % positions.length;
+      const nextPosition = positions[nextIndex];
       
       Animated.timing(animValue, {
-        toValue: { x: randomX, y: randomY },
-        duration: duration,
+        toValue: { x: nextPosition.x, y: nextPosition.y },
+        duration: 5000,
         useNativeDriver: true,
       }).start(() => {
-        // Continue animation with new random values
-        setTimeout(() => animateCircle(animValue, duration), 2000);
+        if (animValue === circle1Anim) {
+          currentIndex1 = nextIndex;
+          animateCircle(animValue, currentIndex1);
+        } else {
+          currentIndex2 = nextIndex;
+          animateCircle(animValue, currentIndex2);
+        }
       });
     };
 
-    // Start animations for both circles
-    animateCircle(circle1Anim, 3000);
-    animateCircle(circle2Anim, 4000);
+    animateCircle(circle1Anim, currentIndex1);
+    animateCircle(circle2Anim, currentIndex2);
   }, []);
 
   // Keyboard event listeners
@@ -144,18 +158,7 @@ export default function SignInScreen({ navigation }) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: keyboardHeight > 0 ? 20 : 20 }
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-          scrollEventThrottle={16}
-        >
+        <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
             <Image
@@ -191,11 +194,6 @@ export default function SignInScreen({ navigation }) {
                 onChangeText={handleEmailChange}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                onFocus={() => {
-                  setTimeout(() => {
-                    scrollViewRef.current?.scrollToEnd({ animated: true });
-                  }, 100);
-                }}
               />
               {errors.email && <Text style={styles.error}>{errors.email}</Text>}
             </View>
@@ -211,11 +209,6 @@ export default function SignInScreen({ navigation }) {
                   secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={setPassword}
-                  onFocus={() => {
-                    setTimeout(() => {
-                      scrollViewRef.current?.scrollToEnd({ animated: true });
-                    }, 100);
-                  }}
                 />
                 <TouchableOpacity
                   style={styles.eyeIcon}
@@ -273,7 +266,7 @@ export default function SignInScreen({ navigation }) {
               </Text>
             </View>
           </View>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -286,11 +279,11 @@ const getStyles = (theme) => StyleSheet.create({
   },
   circle1: {
     position: 'absolute',
-    top: -210,
-    right: -105,
-    width: 420,
-    height: 420,
-    borderRadius: 210,
+    top: -175,
+    right: -87.5,
+    width: 350,
+    height: 350,
+    borderRadius: 175,
     backgroundColor: 'rgba(124, 1, 246, 0.40)',
     shadowColor: '#7C01F6',
     shadowOffset: {
@@ -323,14 +316,10 @@ const getStyles = (theme) => StyleSheet.create({
   keyboardContainer: {
     flex: 1,
   },
-  scrollView: {
+  content: {
     flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
     justifyContent: "center",
-    paddingBottom: 20,
-    paddingTop: 20,
+    paddingHorizontal: 0,
   },
   header: { 
     alignItems: "center", 
@@ -356,19 +345,14 @@ const getStyles = (theme) => StyleSheet.create({
     marginBottom: -5,
   },
   form: {
-    backgroundColor: theme.colors.card,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     marginHorizontal: 20,
     borderRadius: 15,
     padding: 20,
     zIndex: 10,
-    elevation: 5,
-    shadowColor: theme.colors.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    backdropFilter: 'blur(10px)',
   },
   inputGroup: {
     marginBottom: 15,
@@ -382,8 +366,8 @@ const getStyles = (theme) => StyleSheet.create({
   },
   inputFull: {
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.inputBackground,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     padding: 12,
     borderRadius: 10,
     fontSize: 13,

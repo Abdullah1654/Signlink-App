@@ -11,6 +11,7 @@ import {
   Platform,
   Dimensions,
   Animated,
+  Easing,
 } from "react-native";
 import axios from "axios";
 import * as Keychain from 'react-native-keychain';
@@ -38,25 +39,39 @@ export default function SignUpScreen({ navigation }) {
   const circle1Anim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const circle2Anim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
-  // Random movement animation for circles
+  // Consistent circular movement animation for circles
   useEffect(() => {
-    const animateCircle = (animValue, duration) => {
-      const randomX = (Math.random() - 0.5) * 200; // Random movement within 200px
-      const randomY = (Math.random() - 0.5) * 200;
+    const positions = [
+      { x: 0, y: 0 },
+      { x: 50, y: -50 },
+      { x: 100, y: 0 },
+      { x: 50, y: 50 },
+      { x: 0, y: 0 },
+    ];
+    let currentIndex1 = 0;
+    let currentIndex2 = 2; // Start circle2 at different position for variety
+
+    const animateCircle = (animValue, indexRef) => {
+      const nextIndex = (indexRef + 1) % positions.length;
+      const nextPosition = positions[nextIndex];
       
       Animated.timing(animValue, {
-        toValue: { x: randomX, y: randomY },
-        duration: duration,
+        toValue: { x: nextPosition.x, y: nextPosition.y },
+        duration: 5000,
         useNativeDriver: true,
       }).start(() => {
-        // Continue animation with new random values
-        setTimeout(() => animateCircle(animValue, duration), 2000);
+        if (animValue === circle1Anim) {
+          currentIndex1 = nextIndex;
+          animateCircle(animValue, currentIndex1);
+        } else {
+          currentIndex2 = nextIndex;
+          animateCircle(animValue, currentIndex2);
+        }
       });
     };
 
-    // Start animations for both circles
-    animateCircle(circle1Anim, 3000);
-    animateCircle(circle2Anim, 4000);
+    animateCircle(circle1Anim, currentIndex1);
+    animateCircle(circle2Anim, currentIndex2);
   }, []);
 
   const validateEmail = (email) =>
@@ -148,12 +163,7 @@ export default function SignUpScreen({ navigation }) {
         style={styles.keyboardContainer} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+        <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
             <Image
@@ -177,7 +187,7 @@ export default function SignUpScreen({ navigation }) {
           {/* Row inputs */}
           <View style={styles.rowContainer}>
             <View style={styles.row}>
-              <View style={styles.inputGroup}>
+              <View style={styles.inputGroupRow}>
                 <Text style={styles.label}>First Name</Text>
                 <TextInput
                   style={[styles.input, errors.firstName && styles.inputError]}
@@ -187,7 +197,7 @@ export default function SignUpScreen({ navigation }) {
                   onChangeText={setFirstName}
                 />
               </View>
-              <View style={styles.inputGroup}>
+              <View style={styles.inputGroupRow}>
                 <Text style={styles.label}>Last Name</Text>
                 <TextInput
                   style={[styles.input, errors.lastName && styles.inputError]}
@@ -291,7 +301,7 @@ export default function SignUpScreen({ navigation }) {
           {/* Google Sign-in */}
           <GoogleSignInButton navigation={navigation} screenType="signup" />
           </View>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -304,11 +314,11 @@ const getStyles = (theme) => StyleSheet.create({
   },
   circle1: {
     position: 'absolute',
-    top: -210,
-    right: -105,
-    width: 420,
-    height: 420,
-    borderRadius: 210,
+    top: -175,
+    right: -87.5,
+    width: 350,
+    height: 350,
+    borderRadius: 175,
     backgroundColor: 'rgba(124, 1, 246, 0.40)',
     shadowColor: '#7C01F6',
     shadowOffset: {
@@ -326,7 +336,7 @@ const getStyles = (theme) => StyleSheet.create({
     left: -87.5,
     width: 350,
     height: 350,
-    borderRadius: 210,
+    borderRadius: 175,
     backgroundColor: 'rgba(124, 1, 246, 0.40)',
     shadowColor: '#7C01F6',
     shadowOffset: {
@@ -341,14 +351,10 @@ const getStyles = (theme) => StyleSheet.create({
   keyboardContainer: {
     flex: 1,
   },
-  scrollView: {
+  content: {
     flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
     justifyContent: "center",
-    paddingBottom: 20,
-    minHeight: height,
+    paddingHorizontal: 0,
   },
   header: { 
     alignItems: "center", 
@@ -375,19 +381,14 @@ const getStyles = (theme) => StyleSheet.create({
     fontWeight: "bold" 
   },
   form: {
-    backgroundColor: theme.colors.card,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     marginHorizontal: 20,
     borderRadius: 15,
     padding: 20,
     zIndex: 10,
-    elevation: 5,
-    shadowColor: theme.colors.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    backdropFilter: 'blur(10px)',
   },
   rowContainer: {
     marginBottom: 0,
@@ -398,6 +399,9 @@ const getStyles = (theme) => StyleSheet.create({
     alignItems: "flex-start",
   },
   inputGroup: {
+    marginBottom: 15,
+  },
+  inputGroupRow: {
     flex: 1,
     marginHorizontal: 4,
     marginBottom: 15,
@@ -411,8 +415,8 @@ const getStyles = (theme) => StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.inputBackground,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     padding: 12,
     borderRadius: 10,
     fontSize: 13,
@@ -421,8 +425,8 @@ const getStyles = (theme) => StyleSheet.create({
   },
   inputFull: {
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.inputBackground,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     padding: 12,
     borderRadius: 10,
     fontSize: 13,

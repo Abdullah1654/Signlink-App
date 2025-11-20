@@ -238,6 +238,6 @@ class GestureRecognizerView @JvmOverloads constructor(
 
     companion object {
         private const val TAG = "GestureRecognizerView"
-        private const val DEFAULT_CONFIDENCE = 0.5f
+        private const val DEFAULT_CONFIDENCE = 0.7f
     }
 }
