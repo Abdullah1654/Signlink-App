@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Alert, StyleSheet, Image, NativeEventEmitter, NativeModules, ScrollView, PermissionsAndroid } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, StyleSheet, Image, NativeEventEmitter, NativeModules, ScrollView, PermissionsAndroid, Linking, Modal, Dimensions } from 'react-native';
 import { mediaDevices, RTCView, RTCPeerConnection } from 'react-native-webrtc';
 import socketService from '../utils/socketService';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -25,6 +25,9 @@ const VideoCallScreen = () => {
   const [callDuration, setCallDuration] = useState(0);
   const [pendingOffer, setPendingOffer] = useState(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [showPermissionRequestModal, setShowPermissionRequestModal] = useState(false);
+  const [permissionType, setPermissionType] = useState(''); // 'camera' or 'microphone'
   
   // Use ref to track call status for closure issues
   const callStatusRef = useRef(isInitiator ? 'calling' : 'ringing');
@@ -444,6 +447,16 @@ const VideoCallScreen = () => {
   const initializeWebRTC = async () => {
     try {
       console.log('Initializing WebRTC for callId:', callId);
+      
+      // Check camera permission first
+      const cameraPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
+      if (!cameraPermission) {
+        // Show custom modal instead of native dialog
+        setPermissionType('camera');
+        setShowPermissionRequestModal(true);
+        return;
+      }
+      
       const stream = await mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: 640, height: 480, frameRate: 30 },
         audio: false, // Disable audio transmission by default
@@ -568,7 +581,7 @@ const VideoCallScreen = () => {
       }
     } catch (error) {
       console.error('WebRTC initialization error:', error);
-      Alert.alert('Error', 'Failed to initialize video call');
+      // Don't show React Native error, just navigate back
       navigation.goBack();
     }
   };
@@ -670,6 +683,13 @@ const VideoCallScreen = () => {
 
   const requestMicrophonePermission = async () => {
     try {
+      // First check if permission is already granted
+      const checkResult = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+      if (checkResult) {
+        return true;
+      }
+
+      // Request permission
       const granted = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
         {
@@ -680,12 +700,60 @@ const VideoCallScreen = () => {
           buttonPositive: 'OK',
         }
       );
+
+      // Check if permission is permanently denied
+      if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+        setPermissionType('microphone');
+        setShowPermissionModal(true);
+        return false;
+      }
+
       return granted === PermissionsAndroid.RESULTS.GRANTED;
     } catch (err) {
       console.error('Permission request error:', err);
-      Alert.alert('Permission Error', 'Unable to request microphone permission. Please enable it manually in settings.');
+      setShowPermissionModal(true);
       return false;
     }
+  };
+
+  const openAppSettings = () => {
+    setShowPermissionModal(false);
+    Linking.openSettings();
+    navigation.goBack();
+  };
+
+  const handleRequestCameraPermission = async () => {
+    setShowPermissionRequestModal(false);
+    
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      {
+        title: 'Camera Permission',
+        message: 'Allow SignLink to access your camera for video calls.',
+        buttonPositive: 'Allow',
+        buttonNegative: 'Deny',
+      }
+    );
+    
+    if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+      // Permission permanently denied
+      setPermissionType('camera');
+      setShowPermissionModal(true);
+      return;
+    }
+    
+    if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+      // Permission granted, reinitialize WebRTC
+      initializeWebRTC();
+    } else {
+      // Permission denied, go back
+      navigation.goBack();
+    }
+  };
+
+  const handleCancelPermissionRequest = () => {
+    setShowPermissionRequestModal(false);
+    navigation.goBack();
   };
 
 
@@ -695,7 +763,6 @@ const VideoCallScreen = () => {
         // Request microphone permission first
         const hasPermission = await requestMicrophonePermission();
         if (!hasPermission) {
-          Alert.alert('Permission Required', 'Microphone permission is required for speech-to-text functionality.');
           return;
         }
 
@@ -1343,6 +1410,98 @@ const VideoCallScreen = () => {
         callerName={contact.name}
         onClose={() => setShowRejectModal(false)}
       />
+
+      {/* Permission Request Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showPermissionRequestModal}
+        onRequestClose={handleCancelPermissionRequest}
+      >
+        <View style={styles.permissionModalOverlay}>
+          <View style={styles.permissionModalContent}>
+            <View style={styles.permissionModalHeader}>
+              <Text style={styles.permissionModalTitle}>
+                Camera Access Required
+              </Text>
+            </View>
+            
+            <View style={styles.permissionModalBody}>
+              <Text style={styles.permissionModalMessage}>
+                SignLink needs access to your camera to enable video calls with your contacts.
+              </Text>
+              <Text style={styles.permissionModalInfo}>
+                Your privacy is important. Camera access is only used during video calls.
+              </Text>
+            </View>
+
+            <View style={styles.permissionModalActions}>
+              <TouchableOpacity
+                style={[styles.permissionModalButton, styles.permissionCancelButton]}
+                onPress={handleCancelPermissionRequest}
+              >
+                <Text style={styles.permissionCancelButtonText}>Not Now</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.permissionModalButton, styles.permissionSettingsButton]}
+                onPress={handleRequestCameraPermission}
+              >
+                <Text style={styles.permissionSettingsButtonText}>Allow Camera</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Permission Settings Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showPermissionModal}
+        onRequestClose={() => {
+          setShowPermissionModal(false);
+          navigation.goBack();
+        }}
+      >
+        <View style={styles.permissionModalOverlay}>
+          <View style={styles.permissionModalContent}>
+            <View style={styles.permissionModalHeader}>
+              <Text style={styles.permissionModalTitle}>
+                {permissionType === 'camera' ? 'Camera' : 'Microphone'} Permission Required
+              </Text>
+            </View>
+            
+            <View style={styles.permissionModalBody}>
+              <Text style={styles.permissionModalMessage}>
+                You've denied {permissionType} permission. To use {permissionType === 'camera' ? 'video calls' : 'speech-to-text'}, please enable it in your device settings.
+              </Text>
+              <Text style={styles.permissionModalSteps}>
+                Settings → Apps → SignLink → Permissions → {permissionType === 'camera' ? 'Camera' : 'Microphone'}
+              </Text>
+            </View>
+
+            <View style={styles.permissionModalActions}>
+              <TouchableOpacity
+                style={[styles.permissionModalButton, styles.permissionCancelButton]}
+                onPress={() => {
+                  setShowPermissionModal(false);
+                  navigation.goBack();
+                }}
+              >
+                <Text style={styles.permissionCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.permissionModalButton, styles.permissionSettingsButton]}
+                onPress={openAppSettings}
+              >
+                <Text style={styles.permissionSettingsButtonText}>Open Settings</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1699,6 +1858,88 @@ const getStyles = (theme) => StyleSheet.create({
   },
   speakerButtonDisabled: {
     opacity: 0.5,
+  },
+  // Permission Modal Styles
+  permissionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  permissionModalContent: {
+    backgroundColor: theme.colors.card,
+    borderRadius: 20,
+    width: Dimensions.get('window').width * 0.85,
+    maxWidth: 400,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  permissionModalHeader: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+  },
+  permissionModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+    textAlign: 'center',
+  },
+  permissionModalBody: {
+    padding: 20,
+  },
+  permissionModalMessage: {
+    fontSize: 15,
+    color: theme.colors.text,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 15,
+  },
+  permissionModalInfo: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+    fontStyle: 'italic',
+  },
+  permissionModalSteps: {
+    fontSize: 13,
+    color: theme.colors.primary,
+    textAlign: 'center',
+    fontWeight: '500',
+    fontStyle: 'italic',
+  },
+  permissionModalActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+  },
+  permissionModalButton: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionCancelButton: {
+    borderRightWidth: 1,
+    borderRightColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+  },
+  permissionCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
+  permissionSettingsButton: {
+    backgroundColor: 'transparent',
+  },
+  permissionSettingsButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
 });
 

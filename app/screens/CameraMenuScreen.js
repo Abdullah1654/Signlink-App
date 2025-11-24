@@ -7,8 +7,11 @@ import {
   Alert,
   SafeAreaView,
   StatusBar,
+  Modal,
+  Linking,
+  Dimensions,
 } from 'react-native';
-import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+import { check, request, PERMISSIONS, RESULTS, openSettings } from 'react-native-permissions';
 import NavigatorModule from '../utils/NavigatorModule';
 import BottomNavigation from '../components/BottomNavigation';
 import { useTheme, createThemedStyles } from '../utils/themeService';
@@ -16,29 +19,46 @@ import { useTheme, createThemedStyles } from '../utils/themeService';
 const CameraMenuScreen = ({ navigation }) => {
   const [hasPermission, setHasPermission] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
   const { theme } = useTheme();
   const styles = createThemedStyles(getStyles)(theme);
 
   useEffect(() => {
-    const ensureCameraPermission = async () => {
+    const checkCameraPermission = async () => {
       const result = await check(PERMISSIONS.ANDROID.CAMERA);
       if (result === RESULTS.GRANTED) {
         setHasPermission(true);
       } else {
-        const requestResult = await request(PERMISSIONS.ANDROID.CAMERA);
-        setHasPermission(requestResult === RESULTS.GRANTED);
+        setHasPermission(false);
       }
     };
-    ensureCameraPermission();
+    checkCameraPermission();
   }, []);
 
   const openCamera = async () => {
     if (!hasPermission) {
-      const requestResult = await request(PERMISSIONS.ANDROID.CAMERA);
-      if (requestResult !== RESULTS.GRANTED) {
-        Alert.alert('Permission required', 'Camera permission is required to use the gesture recognizer.');
+      // Check current permission status
+      const checkResult = await check(PERMISSIONS.ANDROID.CAMERA);
+      
+      if (checkResult === RESULTS.BLOCKED) {
+        // Permission permanently denied - show modal to go to settings
+        setShowPermissionModal(true);
         return;
       }
+      
+      // Request permission
+      const requestResult = await request(PERMISSIONS.ANDROID.CAMERA);
+      
+      if (requestResult === RESULTS.BLOCKED) {
+        // User denied twice - permission permanently blocked
+        setShowPermissionModal(true);
+        return;
+      }
+      
+      if (requestResult !== RESULTS.GRANTED) {
+        return;
+      }
+      
       setHasPermission(true);
     }
     
@@ -55,6 +75,11 @@ const CameraMenuScreen = ({ navigation }) => {
     // The native activity will handle closing itself
   };
 
+  const handleOpenSettings = () => {
+    setShowPermissionModal(false);
+    openSettings();
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={theme.name === 'dark' ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
@@ -68,12 +93,11 @@ const CameraMenuScreen = ({ navigation }) => {
       <View style={styles.content}>
         <View style={styles.cameraButtonContainer}>
           <TouchableOpacity
-            style={[styles.cameraButton, !hasPermission && styles.disabledButton]}
+            style={styles.cameraButton}
             onPress={openCamera}
-            disabled={!hasPermission}
           >
             <Text style={styles.cameraButtonText}>
-              {hasPermission ? 'Open Camera' : 'Camera Permission Required'}
+              {hasPermission ? 'Open Camera' : 'Grant Camera Permission'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -86,6 +110,47 @@ const CameraMenuScreen = ({ navigation }) => {
       </View>
 
       <BottomNavigation />
+
+      {/* Permission Settings Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showPermissionModal}
+        onRequestClose={() => setShowPermissionModal(false)}
+      >
+        <View style={styles.permissionModalOverlay}>
+          <View style={styles.permissionModalContent}>
+            <View style={styles.permissionModalHeader}>
+              <Text style={styles.permissionModalTitle}>Camera Permission Required</Text>
+            </View>
+            
+            <View style={styles.permissionModalBody}>
+              <Text style={styles.permissionModalMessage}>
+                You've denied camera permission. To use gesture recognition, please enable it in your device settings.
+              </Text>
+              <Text style={styles.permissionModalSteps}>
+                Settings → Apps → SignLink → Permissions → Camera
+              </Text>
+            </View>
+
+            <View style={styles.permissionModalActions}>
+              <TouchableOpacity
+                style={[styles.permissionModalButton, styles.permissionCancelButton]}
+                onPress={() => setShowPermissionModal(false)}
+              >
+                <Text style={styles.permissionCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.permissionModalButton, styles.permissionSettingsButton]}
+                onPress={handleOpenSettings}
+              >
+                <Text style={styles.permissionSettingsButtonText}>Open Settings</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -164,6 +229,81 @@ const getStyles = (theme) => StyleSheet.create({
     color: theme.colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
+  },
+  // Permission Modal Styles
+  permissionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  permissionModalContent: {
+    backgroundColor: theme.colors.card,
+    borderRadius: 20,
+    width: Dimensions.get('window').width * 0.85,
+    maxWidth: 400,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  permissionModalHeader: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+  },
+  permissionModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+    textAlign: 'center',
+  },
+  permissionModalBody: {
+    padding: 20,
+  },
+  permissionModalMessage: {
+    fontSize: 15,
+    color: theme.colors.text,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 15,
+  },
+  permissionModalSteps: {
+    fontSize: 13,
+    color: theme.colors.primary,
+    textAlign: 'center',
+    fontWeight: '500',
+    fontStyle: 'italic',
+  },
+  permissionModalActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+  },
+  permissionModalButton: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionCancelButton: {
+    borderRightWidth: 1,
+    borderRightColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+  },
+  permissionCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
+  permissionSettingsButton: {
+    backgroundColor: 'transparent',
+  },
+  permissionSettingsButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
 });
 
