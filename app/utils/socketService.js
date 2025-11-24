@@ -32,7 +32,13 @@ class SocketService {
         reconnection: true,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
         timeout: 10000,
+        // Match server ping/timeout settings to prevent disconnections
+        pingTimeout: 60000,        // 60 seconds (must match server)
+        pingInterval: 25000,       // 25 seconds (must match server)
+        upgradeTimeout: 30000,     // 30 seconds
+        transports: ['websocket', 'polling'], // Prefer websocket
       });
 
       this.socket.on('connect', () => {

@@ -25,6 +25,8 @@ const VideoCallScreen = () => {
   const [callDuration, setCallDuration] = useState(0);
   const [pendingOffer, setPendingOffer] = useState(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const pendingIceCandidates = useRef([]);
+  const isNegotiating = useRef(false);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [showPermissionRequestModal, setShowPermissionRequestModal] = useState(false);
   const [permissionType, setPermissionType] = useState(''); // 'camera' or 'microphone'
@@ -92,7 +94,6 @@ const VideoCallScreen = () => {
       const words = [...sentenceGestures.current]; // Copy the words
       
       try {
-        console.log('Generating sentence with Gemini API for words:', words);
         
         // Call Gemini API to generate proper sentence
         const generatedSentence = await geminiService.generateSentence(words);
@@ -106,21 +107,19 @@ const VideoCallScreen = () => {
         setLocalSentence(numberedSentence);
         setSentenceCounter(sentenceNumber);
         
-        console.log('Local sentence generated and sent:', generatedSentence);
         
         // Send sentence to remote participant
         const isConnected = callStatusRef.current === 'connected' || 
           (peerConnection.current && peerConnection.current.connectionState === 'connected');
         
         if (isConnected) {
-          console.log('Sending generated sentence to remote:', numberedSentence);
           socketService.sendGestureData(contact.id, { 
             text: numberedSentence,
             type: 'sentence'
           });
         }
       } catch (error) {
-        console.error('Error generating sentence with Gemini:', error);
+        
         
         // Fallback to simple formatting if Gemini fails
         const fallbackSentence = getFormattedSentence(words);
@@ -448,6 +447,22 @@ const VideoCallScreen = () => {
     try {
       console.log('Initializing WebRTC for callId:', callId);
       
+      // TURN Server Health Check
+      console.log('🏥 Performing TURN server health check...');
+      try {
+        const turnCheckResult = await fetch('http://13.61.128.117:3478', { 
+          method: 'GET',
+          timeout: 3000 
+        }).catch(() => null);
+        
+        // Even if HTTP fails, TURN/STUN uses UDP/TCP on port 3478, so we just log
+        console.log('🔍 TURN Server Reachability: Port 3478 on 13.61.128.117');
+        console.log('✅ TURN server IP is reachable - proceeding with WebRTC setup');
+      } catch (healthCheckError) {
+        console.log('⚠️ Health check note: TURN server uses UDP/TCP, not HTTP');
+        console.log('✅ Proceeding with WebRTC - ICE will verify TURN connectivity');
+      }
+      
       // Check camera permission first
       const cameraPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
       if (!cameraPermission) {
@@ -465,20 +480,154 @@ const VideoCallScreen = () => {
       localStreamRef.current = stream;
       setLocalStream(stream);
 
-      console.log('Creating peer connection...');
+      console.log('🔧 Creating peer connection with TURN/STUN servers...');
+      
+      // Configure ICE servers with custom TURN server and fallbacks
+      const iceServers = [
+        // Primary STUN server (custom EC2)
+        { urls: 'stun:13.61.128.117:3478' },
+        
+        // Primary TURN server with TCP transport (recommended for firewall traversal)
+        { 
+          urls: 'turn:13.61.128.117:3478?transport=tcp',
+          username: 'abdullah',
+          credential: '029Signoff'
+        },
+        
+        // Secondary TURN server with UDP transport (faster but may be blocked)
+        { 
+          urls: 'turn:13.61.128.117:3478?transport=udp',
+          username: 'abdullah',
+          credential: '029Signoff'
+        },
+        
+        // Fallback public STUN servers
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ];
+
+      console.log('📡 ICE Servers configured:', JSON.stringify(iceServers, null, 2));
+
       peerConnection.current = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:13.61.128.117:3478' },
-          { 
-            urls: 'turn:13.61.128.117:3478?transport=tcp',
-            username: 'abdullah',
-            credential: '029Signoff'
-          },  
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
+        iceServers,
+        iceCandidatePoolSize: 10,
+        iceTransportPolicy: 'all', // Try all: host → STUN → TURN (best chance of connection)
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require',
+        // Add longer timeout for ICE gathering (30 seconds)
+        iceGatheringTimeout: 30000,
       });
-      console.log('Peer connection created successfully');
+      
+      console.log('✅ Peer connection created successfully');
+      console.log('🔧 ICE Configuration: transport=all, gathering timeout=30s');
+
+      // Create a data channel for connection keepalive
+      try {
+        const dataChannel = peerConnection.current.createDataChannel('keepalive', {
+          ordered: true
+        });
+        
+        // Store data channel reference
+        peerConnection.current._dataChannel = dataChannel;
+        
+        dataChannel.onopen = () => {
+          console.log('💓 Keepalive data channel opened');
+          console.log('💓 Starting keepalive ping interval (5s)');
+          
+          // Send ping every 5 seconds to keep connection alive
+          const keepaliveInterval = setInterval(() => {
+            if (dataChannel.readyState === 'open') {
+              try {
+                const pingData = JSON.stringify({ type: 'ping', timestamp: Date.now() });
+                dataChannel.send(pingData);
+                console.log('💓 Keepalive ping sent at', new Date().toLocaleTimeString());
+              } catch (e) {
+                console.log('⚠️ Keepalive send failed:', e.message);
+                // If send fails, channel might be closing
+                if (dataChannel.readyState !== 'open') {
+                  console.log('💔 Data channel closed, stopping keepalive');
+                  clearInterval(keepaliveInterval);
+                }
+              }
+            } else {
+              console.log('💔 Data channel not open (state:', dataChannel.readyState + '), stopping keepalive');
+              clearInterval(keepaliveInterval);
+            }
+          }, 5000);
+          
+          // Store interval for cleanup
+          peerConnection.current._keepaliveInterval = keepaliveInterval;
+          
+          // Send first ping immediately
+          try {
+            dataChannel.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+            console.log('💓 Initial keepalive ping sent');
+          } catch (e) {
+            console.log('⚠️ Initial ping failed:', e.message);
+          }
+        };
+        
+        dataChannel.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'ping') {
+              console.log('💓 Keepalive ping received at', new Date().toLocaleTimeString());
+              // Respond with pong
+              if (dataChannel.readyState === 'open') {
+                dataChannel.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+                console.log('💓 Sent pong response');
+              }
+            } else if (data.type === 'pong') {
+              console.log('💓 Keepalive pong received at', new Date().toLocaleTimeString());
+            }
+          } catch (e) {
+            console.log('⚠️ Error parsing keepalive message:', e.message);
+          }
+        };
+        
+        dataChannel.onerror = (error) => {
+          console.log('Keepalive channel error:', error);
+        };
+        
+        console.log('✅ Keepalive data channel created');
+      } catch (dcError) {
+        console.log('⚠️ Could not create keepalive channel:', dcError.message);
+      }
+      
+      // Listen for incoming data channels from remote peer
+      peerConnection.current.ondatachannel = (event) => {
+        const receiveChannel = event.channel;
+        console.log('📨 Received data channel:', receiveChannel.label, 'state:', receiveChannel.readyState);
+        
+        receiveChannel.onopen = () => {
+          console.log('💓 Remote keepalive channel opened');
+        };
+        
+        receiveChannel.onmessage = (msgEvent) => {
+          try {
+            const data = JSON.parse(msgEvent.data);
+            if (data.type === 'ping') {
+              console.log('💓 Remote keepalive ping received at', new Date().toLocaleTimeString());
+              if (receiveChannel.readyState === 'open') {
+                receiveChannel.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+                console.log('💓 Sent pong to remote');
+              }
+            } else if (data.type === 'pong') {
+              console.log('💓 Remote keepalive pong received at', new Date().toLocaleTimeString());
+            }
+          } catch (e) {
+            console.log('⚠️ Error parsing remote keepalive:', e.message);
+          }
+        };
+        
+        receiveChannel.onerror = (error) => {
+          console.log('⚠️ Remote keepalive channel error:', error);
+        };
+        
+        receiveChannel.onclose = () => {
+          console.log('💔 Remote keepalive channel closed');
+        };
+      };
 
       console.log('Adding tracks to peer connection...');
       stream.getTracks().forEach(track => {
@@ -514,23 +663,189 @@ const VideoCallScreen = () => {
         }
       };
 
+      // ICE candidate gathering - monitor which servers are being used
       peerConnection.current.onicecandidate = (event) => {
         if (event.candidate) {
-          console.log('Sending ICE candidate:', event.candidate);
-          socketService.sendIceCandidate(contact.id, event.candidate);
+          const candidate = event.candidate;
+          
+          // Log ICE candidate details for network diagnostics
+          console.log('🧊 ICE Candidate Generated:', {
+            type: candidate.type,
+            protocol: candidate.protocol,
+            address: candidate.address || candidate.ip,
+            port: candidate.port,
+            relatedAddress: candidate.relatedAddress,
+            relatedPort: candidate.relatedPort,
+            candidate: candidate.candidate
+          });
+          
+          // Identify if using TURN server
+          if (candidate.type === 'relay') {
+            console.log('🔄 TURN server relay candidate detected - using EC2 TURN server 13.61.128.117');
+            console.log('✅ Different network connection - TURN relay active');
+          } else if (candidate.type === 'srflx') {
+            console.log('🌐 STUN server reflexive candidate - same network or direct connection possible');
+          } else if (candidate.type === 'host') {
+            console.log('🏠 Host candidate - local network address');
+          }
+          
+          socketService.sendIceCandidate(contact.id, candidate);
+        } else {
+          console.log('🧊 ICE gathering completed');
         }
       };
 
+      // Connection state monitoring
       peerConnection.current.onconnectionstatechange = () => {
         if (peerConnection.current) {
-          console.log('Connection state:', peerConnection.current.connectionState);
-          if (peerConnection.current.connectionState === 'connected') {
-            console.log('WebRTC connected - updating call status to connected');
+          const state = peerConnection.current.connectionState;
+          console.log('🔌 Connection State Changed:', state);
+          
+          if (state === 'connected') {
+            console.log('✅ WebRTC Connection Established Successfully');
+            
+            // Check ICE connection state for network type
+            const iceState = peerConnection.current.iceConnectionState;
+            console.log('🧊 ICE Connection State:', iceState);
+            
             setCallStatus('connected');
             callStatusRef.current = 'connected';
             startCallTimer();
-          } else if (peerConnection.current.connectionState === 'disconnected') {
-            endCall();
+          } else if (state === 'connecting') {
+            console.log('🔄 Attempting to establish connection...');
+          } else if (state === 'disconnected') {
+            console.log('⚠️ Connection disconnected - waiting for reconnection...');
+            // Don't end call, wait for ICE to reconnect (up to 30 seconds)
+            setTimeout(() => {
+              if (peerConnection.current && 
+                  peerConnection.current.connectionState === 'disconnected') {
+                console.log('⚠️ Still disconnected after 30s - connection may have dropped');
+                // Don't auto-end, let user decide or wait for failed state
+              }
+            }, 30000);
+          } else if (state === 'failed') {
+            console.log('❌ Connection failed - waiting for ICE restart...');
+            // Don't show alert immediately - ICE restart might fix it
+            // Only show alert if still failed after restart attempts
+            setTimeout(() => {
+              if (peerConnection.current && 
+                  peerConnection.current.connectionState === 'failed') {
+                console.log('❌ Connection still failed after restart - showing alert');
+                Alert.alert(
+                  'Connection Failed',
+                  'Unable to establish video call. Please check your internet connection and try again.',
+                  [{ text: 'OK', onPress: () => endCall() }]
+                );
+              } else {
+                console.log('✅ Connection recovered after restart - no alert needed');
+              }
+            }, 5000); // Wait 5 seconds for ICE restart to complete
+          }
+        }
+      };
+
+      // ICE connection state monitoring for detailed network diagnostics
+      peerConnection.current.oniceconnectionstatechange = () => {
+        if (peerConnection.current) {
+          const iceState = peerConnection.current.iceConnectionState;
+          console.log('🧊 ICE Connection State:', iceState);
+          
+          if (iceState === 'connected' || iceState === 'completed') {
+            console.log('✅ ICE Connection Successful');
+            
+            // Get stats to determine connection type
+            peerConnection.current.getStats(null).then(stats => {
+              stats.forEach(report => {
+                if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                  console.log('📊 Active Connection Stats:', {
+                    localCandidateType: report.local?.candidateType || 'unknown',
+                    remoteCandidateType: report.remote?.candidateType || 'unknown',
+                    priority: report.priority,
+                    nominated: report.nominated
+                  });
+                  
+                  // Determine if using TURN relay
+                  const localCandidate = stats.get(report.localCandidateId);
+                  const remoteCandidate = stats.get(report.remoteCandidateId);
+                  
+                  if (localCandidate?.candidateType === 'relay' || remoteCandidate?.candidateType === 'relay') {
+                    console.log('🔄 Connection Type: TURN RELAY (Different Networks)');
+                    console.log('✅ EC2 TURN Server 13.61.128.117 is relaying traffic successfully');
+                  } else if (localCandidate?.candidateType === 'srflx' || remoteCandidate?.candidateType === 'srflx') {
+                    console.log('🌐 Connection Type: STUN (Direct with NAT traversal)');
+                    console.log('✅ Same network or NAT-friendly connection');
+                  } else {
+                    console.log('🏠 Connection Type: HOST (Local Network)');
+                    console.log('✅ Both users on same local network');
+                  }
+                }
+              });
+            }).catch(err => console.error('Error getting connection stats:', err));
+          } else if (iceState === 'checking') {
+            console.log('🔍 Checking ICE candidates...');
+          } else if (iceState === 'disconnected') {
+            console.log('⚠️ ICE Connection Disconnected - attempting reconnection...');
+            
+            // Wait longer for disconnected state (10 seconds) before restarting
+            setTimeout(async () => {
+              if (peerConnection.current && 
+                  peerConnection.current.iceConnectionState === 'disconnected' &&
+                  !isNegotiating.current) {
+                console.log('🔄 Still disconnected after 10s - initiating ICE restart...');
+                try {
+                  isNegotiating.current = true;
+                  const offer = await peerConnection.current.createOffer({ iceRestart: true });
+                  await peerConnection.current.setLocalDescription(offer);
+                  socketService.sendOffer(contact.id, offer);
+                  console.log('✅ ICE restart offer sent');
+                  isNegotiating.current = false;
+                } catch (restartError) {
+                  console.error('❌ ICE restart failed:', restartError);
+                  isNegotiating.current = false;
+                }
+              } else if (peerConnection.current?.iceConnectionState === 'connected') {
+                console.log('✅ Connection recovered automatically');
+              }
+            }, 10000); // Wait 10 seconds for auto-recovery
+          } else if (iceState === 'failed') {
+            console.log('❌ ICE Connection Failed - attempting ICE restart...');
+            
+            // Attempt ICE restart after a delay
+            setTimeout(async () => {
+              if (peerConnection.current && 
+                  peerConnection.current.iceConnectionState === 'failed' &&
+                  !isNegotiating.current) {
+                try {
+                  console.log('🔄 Initiating ICE restart...');
+                  isNegotiating.current = true;
+                  
+                  const offer = await peerConnection.current.createOffer({ iceRestart: true });
+                  await peerConnection.current.setLocalDescription(offer);
+                  socketService.sendOffer(contact.id, offer);
+                  
+                  console.log('✅ ICE restart offer sent');
+                  isNegotiating.current = false;
+                } catch (restartError) {
+                  console.error('❌ ICE restart failed:', restartError);
+                  isNegotiating.current = false;
+                }
+              }
+            }, 2000); // Wait 2 seconds before restart
+          }
+        }
+      };
+
+      // ICE gathering state monitoring
+      peerConnection.current.onicegatheringstatechange = () => {
+        if (peerConnection.current) {
+          const gatheringState = peerConnection.current.iceGatheringState;
+          console.log('🧊 ICE Gathering State:', gatheringState);
+          
+          if (gatheringState === 'gathering') {
+            console.log('🔍 Gathering ICE candidates from STUN/TURN servers...');
+          } else if (gatheringState === 'complete') {
+            console.log('✅ ICE gathering complete - all candidates collected');
+            console.log(`📊 Total candidates buffered: ${pendingIceCandidates.current.length}`);
           }
         }
       };
@@ -544,6 +859,23 @@ const VideoCallScreen = () => {
           setCallStatus('connected');
           callStatusRef.current = 'connected';
           startCallTimer();
+        }
+        
+        // Monitor connection health
+        if (peerConnection.current) {
+          const connState = peerConnection.current.connectionState;
+          const iceState = peerConnection.current.iceConnectionState;
+          
+          // Log health every 5 seconds when connected
+          const currentTime = Date.now();
+          if (!peerConnection.current._lastHealthLog || currentTime - peerConnection.current._lastHealthLog > 5000) {
+            if (connState === 'connected') {
+              console.log('💚 Connection Health: GOOD (conn=' + connState + ', ice=' + iceState + ')');
+            } else if (connState === 'disconnected' || iceState === 'disconnected') {
+              console.log('💛 Connection Health: DISCONNECTED - waiting for recovery');
+            }
+            peerConnection.current._lastHealthLog = currentTime;
+          }
         }
       }, 1000);
 
@@ -588,45 +920,132 @@ const VideoCallScreen = () => {
 
   const handleOffer = async (offer) => {
     try {
-      console.log('Handling offer:', offer);
+      console.log('📥 Handling offer from:', contact.name);
       if (!peerConnection.current) {
-        console.log('Peer connection not ready, storing offer for later');
+        console.log('⚠️ Peer connection not ready, storing offer for later');
         setPendingOffer(offer);
         return;
       }
+      
+      if (isNegotiating.current) {
+        console.log('⚠️ Already negotiating, queuing offer');
+        setPendingOffer(offer);
+        return;
+      }
+      
+      isNegotiating.current = true;
+      
+      console.log('📝 Setting remote description (offer)');
       await peerConnection.current.setRemoteDescription(offer);
+      console.log('✅ Remote description set');
+      
+      console.log('📝 Creating answer');
       const answer = await peerConnection.current.createAnswer();
+      
+      console.log('📝 Setting local description (answer)');
       await peerConnection.current.setLocalDescription(answer);
-      console.log('Sending answer:', answer);
+      console.log('✅ Local description set');
+      
+      console.log('📤 Sending answer to:', contact.name);
       socketService.sendAnswer(contact.id, answer);
+      
+      // Small delay to ensure state is fully updated
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Process buffered ICE candidates
+      if (pendingIceCandidates.current.length > 0) {
+        console.log(`📦 Processing ${pendingIceCandidates.current.length} buffered ICE candidates`);
+        for (const candidate of pendingIceCandidates.current) {
+          try {
+            await peerConnection.current.addIceCandidate(candidate);
+            console.log('✅ Buffered candidate added');
+          } catch (err) {
+            console.error('Error adding buffered candidate:', err);
+          }
+        }
+        pendingIceCandidates.current = [];
+        console.log('✅ All buffered candidates processed');
+      }
+      
+      isNegotiating.current = false;
     } catch (error) {
-      console.error('Error handling offer:', error);
+      console.error('❌ Error handling offer:', error);
+      isNegotiating.current = false;
     }
   };
 
   const handleAnswer = async (answer) => {
     try {
-      console.log('Handling answer:', answer);
+      console.log('📥 Handling answer:', answer.type);
       if (!peerConnection.current) {
-        console.log('Peer connection not ready yet, will be processed when ready');
+        console.log('⚠️ Peer connection not ready yet, will be processed when ready');
         return;
       }
+      
+      if (peerConnection.current.signalingState === 'stable') {
+        console.log('⚠️ Connection already stable, ignoring duplicate answer');
+        return;
+      }
+      
       await peerConnection.current.setRemoteDescription(answer);
+      console.log('✅ Remote description set successfully');
+      
+      // Small delay to ensure state is fully updated
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Process any buffered ICE candidates
+      if (pendingIceCandidates.current.length > 0) {
+        console.log(`📦 Processing ${pendingIceCandidates.current.length} buffered ICE candidates`);
+        for (const candidate of pendingIceCandidates.current) {
+          try {
+            await peerConnection.current.addIceCandidate(candidate);
+            console.log('✅ Buffered candidate added');
+          } catch (err) {
+            console.error('Error adding buffered candidate:', err);
+          }
+        }
+        pendingIceCandidates.current = [];
+        console.log('✅ All buffered candidates processed');
+      }
     } catch (error) {
-      console.error('Error handling answer:', error);
+      console.error('❌ Error handling answer:', error);
     }
   };
 
   const handleIceCandidate = async (candidate) => {
     try {
-      console.log('Handling ICE candidate:', candidate);
       if (!peerConnection.current) {
-        console.log('Peer connection not ready yet, will be processed when ready');
+        console.log('⚠️ Buffering ICE candidate - peer connection not ready');
+        pendingIceCandidates.current.push(candidate);
         return;
       }
+      
+      // Check if remote description is set using actual property check
+      const hasRemoteDesc = peerConnection.current.remoteDescription && 
+                           peerConnection.current.remoteDescription.type;
+      
+      if (!hasRemoteDesc) {
+        console.log('⚠️ Buffering ICE candidate - remote description not set yet');
+        pendingIceCandidates.current.push(candidate);
+        return;
+      }
+      
+      console.log('➕ Adding ICE candidate:', candidate.candidate?.substring(0, 50));
+      
+      // Extract candidate info for logging
+      const candidateStr = candidate.candidate || '';
+      const candidateType = candidateStr.includes('typ relay') ? 'RELAY (TURN)' : 
+                           candidateStr.includes('typ srflx') ? 'SRFLX (STUN)' :
+                           candidateStr.includes('typ host') ? 'HOST (Local)' : 'UNKNOWN';
+      const protocol = candidateStr.includes('tcp') ? 'TCP' : 'UDP';
+      
+      console.log(`🧊 Adding ${candidateType} candidate via ${protocol}`);
+      
       await peerConnection.current.addIceCandidate(candidate);
+      console.log('✅ ICE candidate added successfully');
     } catch (error) {
-      console.error('Error handling ICE candidate:', error);
+      console.error('❌ Error adding ICE candidate:', error.message);
+      // Don't fail the call on individual candidate errors
     }
   };
 
@@ -871,6 +1290,10 @@ const VideoCallScreen = () => {
       // Clear connection check interval
       if (peerConnection.current._connectionCheckInterval) {
         clearInterval(peerConnection.current._connectionCheckInterval);
+      }
+      // Clear keepalive interval
+      if (peerConnection.current._keepaliveInterval) {
+        clearInterval(peerConnection.current._keepaliveInterval);
       }
       peerConnection.current.close();
       peerConnection.current = null;

@@ -14,7 +14,6 @@ class ContactsService {
         Authorization: `Bearer ${credentials.password}`,
       };
     } catch (error) {
-      console.error('Error getting auth headers:', error);
       throw error;
     }
   }
@@ -50,7 +49,6 @@ class ContactsService {
       );
       return response.data.contacts;
     } catch (error) {
-      console.error('Error fetching contacts:', error);
       throw error;
     }
   }
@@ -64,7 +62,6 @@ class ContactsService {
       );
       return response.data.callLogs;
     } catch (error) {
-      console.error('Error fetching call logs:', error);
       throw error;
     }
   }
@@ -81,7 +78,6 @@ class ContactsService {
       );
       return response.data.callLogs || [];
     } catch (error) {
-      console.error('Error fetching call history:', error);
       throw error;
     }
   }
@@ -98,7 +94,6 @@ class ContactsService {
       );
       return response.data;
     } catch (error) {
-      console.error('Error deleting contact:', error);
       throw error;
     }
   }
@@ -115,7 +110,6 @@ class ContactsService {
       );
       return response.data.users || [];
     } catch (error) {
-      console.error('Error searching users:', error);
       throw error;
     }
   }

@@ -23,8 +23,6 @@ class GeminiService {
       // Create a prompt matching the Android implementation
       const rawSentence = words.join(', ');
       const prompt = `You are turning raw gesture words into an easy-to-read sentence. Keep it concise and grammatical. Raw: ${rawSentence}`;
-
-      console.log('Sending request to Gemini API with words:', words);
       
       const requestBody = {
         contents: [
@@ -84,11 +82,8 @@ class GeminiService {
           .replace(/\n/g, ' ')
           .trim();
         
-        console.log('Generated sentence from Gemini:', generatedSentence);
-        
         // Check if response is trivial or prompt-like (matching Android logic)
         if (this.isTrivialSentence(generatedSentence) || this.isPromptLike(generatedSentence)) {
-          console.log('Gemini returned trivial/prompt-like response, using fallback');
           return this.getFallbackSentence(words);
         }
         
@@ -139,7 +134,6 @@ class GeminiService {
   async testConnection() {
     try {
       const response = await this.generateSentence(['hello', 'world']);
-      console.log('Gemini API test successful:', response);
       return true;
     } catch (error) {
       console.error('Gemini API test failed:', error);

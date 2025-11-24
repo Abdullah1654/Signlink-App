@@ -14,7 +14,6 @@ class ConversationService {
         'Content-Type': 'application/json',
       };
     } catch (error) {
-      console.error('Error getting auth headers:', error);
       throw error;
     }
   }
@@ -38,7 +37,6 @@ class ConversationService {
       const data = await response.json();
       return data.messages || [];
     } catch (error) {
-      console.error('Error fetching conversation:', error);
       throw error;
     }
   }
@@ -58,7 +56,6 @@ class ConversationService {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('Error fetching call conversation:', error);
       throw error;
     }
   }
@@ -79,14 +76,12 @@ class ConversationService {
 
   groupMessagesByCall(messages) {
     if (!messages || !Array.isArray(messages)) {
-      console.warn('Invalid messages array provided to groupMessagesByCall');
       return {};
     }
     
     const grouped = {};
     messages.forEach(message => {
       if (!message || !message.callLogId) {
-        console.warn('Invalid message object:', message);
         return;
       }
       
@@ -121,7 +116,6 @@ class ConversationService {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('Error deleting call messages:', error);
       throw error;
     }
   }
