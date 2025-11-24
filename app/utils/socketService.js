@@ -141,10 +141,10 @@ class SocketService {
 
   async initiateCall(targetUserId, callId) {
     if (!this.isSocketConnected()) {
-      throw new Error('Socket not connected');
+      throw new Error('Not connected to server. Please check your internet connection.');
     }
     if (!targetUserId || !callId) {
-      throw new Error('Invalid targetUserId or callId');
+      throw new Error('Invalid call parameters');
     }
     this.socket.emit('call-user', { targetUserId, callId });
     console.log('Initiated call to:', targetUserId, 'callId:', callId);
@@ -152,7 +152,10 @@ class SocketService {
 
   async acceptCall(callId) {
     if (!this.isSocketConnected()) {
-      throw new Error('Socket not connected');
+      throw new Error('Not connected to server. Please check your internet connection.');
+    }
+    if (!callId) {
+      throw new Error('Invalid call ID');
     }
     this.socket.emit('accept-call', { callId });
     console.log('Accepted call:', callId);
@@ -160,7 +163,10 @@ class SocketService {
 
   async rejectCall(callId) {
     if (!this.isSocketConnected()) {
-      throw new Error('Socket not connected');
+      throw new Error('Not connected to server. Please check your internet connection.');
+    }
+    if (!callId) {
+      throw new Error('Invalid call ID');
     }
     this.socket.emit('reject-call', { callId });
     console.log('Rejected call:', callId);
@@ -168,7 +174,10 @@ class SocketService {
 
   async endCall(callId) {
     if (!this.isSocketConnected()) {
-      throw new Error('Socket not connected');
+      throw new Error('Not connected to server. Please check your internet connection.');
+    }
+    if (!callId) {
+      throw new Error('Invalid call ID');
     }
     this.socket.emit('end-call', { callId });
     console.log('Ended call:', callId);

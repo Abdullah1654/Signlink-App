@@ -21,6 +21,9 @@ class ConversationService {
 
   async getConversationWithContact(contactId) {
     try {
+      if (!contactId) {
+        throw new Error('Contact ID is required');
+      }
       const headers = await this.getAuthHeaders();
       const response = await fetch(`${API_BASE_URL}/conversation/${contactId}`, {
         method: 'GET',
@@ -28,7 +31,8 @@ class ConversationService {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch conversation: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
@@ -74,12 +78,22 @@ class ConversationService {
   }
 
   groupMessagesByCall(messages) {
+    if (!messages || !Array.isArray(messages)) {
+      console.warn('Invalid messages array provided to groupMessagesByCall');
+      return {};
+    }
+    
     const grouped = {};
     messages.forEach(message => {
+      if (!message || !message.callLogId) {
+        console.warn('Invalid message object:', message);
+        return;
+      }
+      
       const callId = message.callLogId;
       if (!grouped[callId]) {
         grouped[callId] = {
-          callLog: message.callLog,
+          callLog: message.callLog || {},
           messages: []
         };
       }
@@ -90,6 +104,9 @@ class ConversationService {
 
   async deleteCallMessages(callLogId) {
     try {
+      if (!callLogId) {
+        throw new Error('Call log ID is required');
+      }
       const headers = await this.getAuthHeaders();
       const response = await fetch(`${API_BASE_URL}/conversation/call/${callLogId}`, {
         method: 'DELETE',
@@ -97,7 +114,8 @@ class ConversationService {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`Failed to delete messages: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();

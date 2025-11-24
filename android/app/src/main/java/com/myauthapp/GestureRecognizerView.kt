@@ -6,7 +6,6 @@ import android.graphics.Color
 import android.util.AttributeSet
 import android.util.Log
 import android.view.LayoutInflater
-import android.widget.AdapterView
 import android.widget.Toast
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -21,7 +20,6 @@ import com.myauthapp.databinding.FragmentCameraBinding
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import java.util.Locale
 
 class GestureRecognizerView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
@@ -62,7 +60,12 @@ class GestureRecognizerView @JvmOverloads constructor(
             }
             backgroundExecutor.execute { setUpCamera() }
         }
+        
+        // Hide the bottom sheet completely
+        binding?.bottomSheetLayout?.root?.visibility = android.view.View.GONE
+        
         backgroundExecutor.execute {
+            // Always use CPU delegate
             gestureRecognizerHelper = GestureRecognizerHelper(
                 context = context,
                 runningMode = RunningMode.LIVE_STREAM,
@@ -74,36 +77,12 @@ class GestureRecognizerView @JvmOverloads constructor(
                 gestureRecognizerListener = this
             )
         }
-        initBottomSheetControls()
         post { setUpCamera() }
     }
 
-    private fun initBottomSheetControls() {
-        binding?.bottomSheetLayout?.apply {
-            spinnerDelegate.setSelection(GestureRecognizerHelper.DELEGATE_CPU, false)
-            spinnerDelegate.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                    gestureRecognizerHelper?.currentDelegate = position
-                    updateControlsUi()
-                }
-                override fun onNothingSelected(parent: AdapterView<*>?) {}
-            }
-        }
-    }
 
-    private fun updateControlsUi() {
-        binding?.bottomSheetLayout?.apply {
-            gestureRecognizerHelper?.let { helper ->
-                backgroundExecutor.execute {
-                    helper.clearGestureRecognizer()
-                    helper.setupGestureRecognizer()
-                }
-            }
-            overlay.clear()
-            binding?.viewFinder?.setBackgroundColor(Color.TRANSPARENT) // Fixed: Use binding?.viewFinder
-            binding?.overlay?.invalidate()
-        }
-    }
+
+
 
     @SuppressLint("MissingPermission")
     private fun setUpCamera() {
@@ -168,38 +147,68 @@ class GestureRecognizerView @JvmOverloads constructor(
     }
     
     fun addSpokenSentence(text: String) {
-        gestureRecognizerResultAdapter?.addSpokenSentence(text)
+        try {
+            if (text.isNotBlank()) {
+                gestureRecognizerResultAdapter?.addSpokenSentence(text.trim())
+            } else {
+                Log.w(TAG, "Attempted to add empty spoken sentence")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error adding spoken sentence: ${e.message}")
+        }
     }
     
     fun toggleCamera() {
-        cameraFacing = if (cameraFacing == CameraSelector.LENS_FACING_FRONT) {
-            CameraSelector.LENS_FACING_BACK
-        } else {
-            CameraSelector.LENS_FACING_FRONT
+        try {
+            cameraFacing = if (cameraFacing == CameraSelector.LENS_FACING_FRONT) {
+                CameraSelector.LENS_FACING_BACK
+            } else {
+                CameraSelector.LENS_FACING_FRONT
+            }
+            if (!backgroundExecutor.isShutdown) {
+                backgroundExecutor.execute { setUpCamera() }
+            } else {
+                Log.e(TAG, "Cannot toggle camera: executor is shutdown")
+                showToast("Camera unavailable")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error toggling camera: ${e.message}")
+            showToast("Failed to switch camera")
         }
-        backgroundExecutor.execute { setUpCamera() }
     }
 
     override fun onResults(resultBundle: GestureRecognizerHelper.ResultBundle) {
-        post {
-            binding?.let { b ->
-                gestureRecognizerResultAdapter?.updateResults(resultBundle.results.first().gestures())
-                val gesture = gestureRecognizerResultAdapter?.getTopGestureName() ?: "No Hands Detected"
-                
-                // Update fixed gesture status line
-                b.tvCurrentGesture?.text = gesture
-                
-                b.bottomSheetLayout.inferenceTimeVal.text = String.format("%d ms", resultBundle.inferenceTime)
-                b.overlay.setResults(resultBundle.results.first(), resultBundle.inputImageHeight, resultBundle.inputImageWidth, RunningMode.LIVE_STREAM)
-                b.viewFinder.setBackgroundColor(
-                    if (gesture != "No Hands Detected" && gesture != "None") Color.GREEN else Color.TRANSPARENT
-                )
-                b.overlay.invalidate()
-                sendEvent("onGestureDetected", Arguments.createMap().apply {
-                    putString("gesture", gesture)
-                    putDouble("inferenceTime", resultBundle.inferenceTime.toDouble())
-                })
+        try {
+            post {
+                binding?.let { b ->
+                    try {
+                        if (resultBundle.results.isNotEmpty()) {
+                            gestureRecognizerResultAdapter?.updateResults(resultBundle.results.first().gestures())
+                            val gesture = gestureRecognizerResultAdapter?.getTopGestureName() ?: "No Hands Detected"
+                            
+                            // Update fixed gesture status line
+                            b.tvCurrentGesture?.text = gesture
+                            
+                            // Removed inference time display
+                            b.overlay.setResults(resultBundle.results.first(), resultBundle.inputImageHeight, resultBundle.inputImageWidth, RunningMode.LIVE_STREAM)
+                            b.viewFinder.setBackgroundColor(
+                                if (gesture != "No Hands Detected" && gesture != "None") Color.GREEN else Color.TRANSPARENT
+                            )
+                            b.overlay.invalidate()
+                            sendEvent("onGestureDetected", Arguments.createMap().apply {
+                                putString("gesture", gesture)
+                                putDouble("inferenceTime", resultBundle.inferenceTime.toDouble())
+                            })
+                        } else {
+                            Log.w(TAG, "Received empty results bundle")
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error processing results: ${e.message}")
+                    }
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onResults: ${e.message}")
         }
     }
 
@@ -209,9 +218,7 @@ class GestureRecognizerView @JvmOverloads constructor(
             gestureRecognizerResultAdapter?.updateResults(null)
             binding?.tvCurrentGesture?.text = "No Hands Detected"
             binding?.viewFinder?.setBackgroundColor(Color.TRANSPARENT)
-            if (errorCode == GestureRecognizerHelper.GPU_ERROR) {
-                binding?.bottomSheetLayout?.spinnerDelegate?.setSelection(GestureRecognizerHelper.DELEGATE_CPU, false)
-            }
+            // Removed GPU error handling since we only use CPU
         }
     }
 
@@ -220,19 +227,38 @@ class GestureRecognizerView @JvmOverloads constructor(
     }
 
     private fun sendEvent(eventName: String, params: WritableMap) {
-        (context as? ReactContext)?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            ?.emit(eventName, params)
+        try {
+            (context as? ReactContext)?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                ?.emit(eventName, params)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending event $eventName: ${e.message}")
+        }
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        gestureRecognizerHelper?.clearGestureRecognizer()
-        backgroundExecutor.shutdown()
         try {
-            backgroundExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS)
+            gestureRecognizerHelper?.clearGestureRecognizer()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clearing gesture recognizer: ${e.message}")
+        }
+        
+        try {
+            if (!backgroundExecutor.isShutdown) {
+                backgroundExecutor.shutdown()
+                if (!backgroundExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    backgroundExecutor.shutdownNow()
+                    Log.w(TAG, "Executor did not terminate gracefully")
+                }
+            }
         } catch (e: InterruptedException) {
             Log.e(TAG, "Error shutting down executor: ${e.message}")
+            backgroundExecutor.shutdownNow()
+            Thread.currentThread().interrupt()
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error during cleanup: ${e.message}")
         }
+        
         binding = null
     }
 

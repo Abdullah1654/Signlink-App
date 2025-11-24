@@ -28,14 +28,27 @@ class TtsHelper(private val context: Context) : TextToSpeech.OnInitListener {
     }
 
     fun speak(text: String) {
-        if (isInitialized && tts != null) {
-            // Stop any ongoing speech
-            tts?.stop()
-            // Speak the text
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
-            Log.d("TtsHelper", "Speaking: $text")
-        } else {
-            Log.w("TtsHelper", "TTS not initialized yet")
+        try {
+            if (text.isBlank()) {
+                Log.w("TtsHelper", "Cannot speak empty text")
+                return
+            }
+            
+            if (isInitialized && tts != null) {
+                // Stop any ongoing speech
+                tts?.stop()
+                // Speak the text
+                val result = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+                if (result == TextToSpeech.ERROR) {
+                    Log.e("TtsHelper", "Error speaking text")
+                } else {
+                    Log.d("TtsHelper", "Speaking: $text")
+                }
+            } else {
+                Log.w("TtsHelper", "TTS not initialized yet")
+            }
+        } catch (e: Exception) {
+            Log.e("TtsHelper", "Error in speak method: ${e.message}")
         }
     }
 
@@ -44,9 +57,15 @@ class TtsHelper(private val context: Context) : TextToSpeech.OnInitListener {
     }
 
     fun shutdown() {
-        tts?.stop()
-        tts?.shutdown()
-        tts = null
-        isInitialized = false
+        try {
+            tts?.stop()
+            tts?.shutdown()
+        } catch (e: Exception) {
+            Log.e("TtsHelper", "Error during shutdown: ${e.message}")
+        } finally {
+            tts = null
+            isInitialized = false
+            Log.d("TtsHelper", "TTS shutdown complete")
+        }
     }
 }

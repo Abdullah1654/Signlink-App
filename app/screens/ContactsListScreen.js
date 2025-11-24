@@ -39,6 +39,8 @@ export default function ContactsListScreen({ navigation }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [sortByRecents, setSortByRecents] = useState(false); // controls recent sorting
+    const [recentCallTimes, setRecentCallTimes] = useState({}); // contactId -> most recent call time
   const searchTimeoutRef = useRef(null);
   const { showSuccess, showError } = useToast();
   const { theme } = useTheme();
@@ -165,7 +167,7 @@ export default function ContactsListScreen({ navigation }) {
       await fetchContacts();
       showSuccess('Contact added successfully');
     } catch (error) {
-      console.error('Error adding contact:', error);
+      // Don't log to console to avoid React Native error warnings
       const errorMessage = error.response?.data?.error || 'Failed to add contact';
       showError(errorMessage);
     } finally {
@@ -287,7 +289,16 @@ export default function ContactsListScreen({ navigation }) {
     contact.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const renderContact = ({ item: contact }) => (
+  // Sort filtered contacts by most recent call time when recents mode is active
+  const sortedFilteredContacts = [...filteredContacts].sort((a, b) => {
+    const timeA = recentCallTimes[a.id] || 0;
+    const timeB = recentCallTimes[b.id] || 0;
+    return timeB - timeA; // most recent first (newest to oldest)
+  });
+
+  const contactsToDisplay = sortByRecents ? sortedFilteredContacts : filteredContacts;
+
+  const renderContact = ({ item: contact, index }) => (
     <TouchableOpacity
       style={styles.contactCard}
       onPress={() => navigation.navigate('Conversation', { contact })}
@@ -356,13 +367,49 @@ export default function ContactsListScreen({ navigation }) {
 
       {/* Recents Filter */}
       <View style={styles.filterContainer}>
-        <TouchableOpacity style={styles.recentsButton}>
+        <TouchableOpacity
+          style={[styles.recentsButton, sortByRecents && styles.recentsButtonActive]}
+          onPress={async () => {
+            if (!sortByRecents) {
+              // Fetch most recent call time for all contacts
+              const times = {};
+              await Promise.all(
+                contacts.map(async (contact) => {
+                  try {
+                    if (!contact || !contact.id) {
+                      times[contact.id] = 0;
+                      return;
+                    }
+                    const callLogs = await contactsService.getCallHistoryWithContact(contact.id);
+                    if (callLogs && callLogs.length > 0) {
+                      // Find the most recent call
+                      const latest = callLogs.reduce((max, log) => {
+                        if (!log || !log.startTime) return max;
+                        const t = new Date(log.startTime).getTime();
+                        return t > max ? t : max;
+                      }, 0);
+                      times[contact.id] = latest;
+                    } else {
+                      times[contact.id] = 0;
+                    }
+                  } catch (err) {
+                    console.error('Error fetching call history for contact:', contact.id, err);
+                    times[contact.id] = 0;
+                  }
+                })
+              );
+              setRecentCallTimes(times);
+            }
+            setSortByRecents(prev => !prev);
+          }}
+          accessibilityLabel="Sort contacts by most recent call time"
+        >
           <Image
             source={require('../../photos/chat.png')}
             style={styles.recentsIcon}
             resizeMode="contain"
           />
-          <Text style={styles.recentsText}>Recents</Text>
+          <Text style={styles.recentsText}>{sortByRecents ? 'Recent • On' : 'Recents'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -375,7 +422,7 @@ export default function ContactsListScreen({ navigation }) {
           </View>
         ) : (
           <FlatList
-            data={filteredContacts}
+            data={contactsToDisplay}
             renderItem={renderContact}
             keyExtractor={(item) => item.id.toString()}
             showsVerticalScrollIndicator={false}

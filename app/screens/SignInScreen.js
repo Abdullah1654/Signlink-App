@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, TextInput, Button, Text, StyleSheet, Alert, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Dimensions, Animated, Keyboard, Easing } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import * as Keychain from 'react-native-keychain';
 import GoogleSignInButton from '../components/GoogleSignInButton';
@@ -59,6 +60,14 @@ export default function SignInScreen({ navigation }) {
     animateCircle(circle1Anim, currentIndex1);
     animateCircle(circle2Anim, currentIndex2);
   }, []);
+
+  // Clear errors when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Clear errors when navigating back to this screen
+      setErrors({});
+    }, [])
+  );
 
   // Keyboard event listeners
   useEffect(() => {
@@ -120,8 +129,20 @@ export default function SignInScreen({ navigation }) {
       await Keychain.setGenericPassword('authToken', token);
       navigation.replace('ContactsList');
     } catch (err) {
-      const errorMessage = err.response?.data?.error || 'Login failed';
-      Alert.alert('Error', errorMessage);
+      console.error('Login error:', err);
+      let errorMessage = 'Unable to sign in. Please try again.';
+      
+      if (err.response?.status === 401) {
+        errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+      } else if (err.response?.status === 404) {
+        errorMessage = 'Account not found. Please sign up first.';
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (!err.response) {
+        errorMessage = 'No internet connection. Please check your network and try again.';
+      }
+      
+      Alert.alert('Sign In Failed', errorMessage);
     } finally {
       setIsLoading(false);
     }

@@ -5,6 +5,7 @@ import socketService from '../utils/socketService';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import RejectCallModal from '../components/RejectCallModal';
 import { useTheme, createThemedStyles } from '../utils/themeService';
+import geminiService from '../utils/geminiService';
 
 const VideoCallScreen = () => {
   const navigation = useNavigation();
@@ -83,31 +84,62 @@ const VideoCallScreen = () => {
     return sentence.charAt(0).toUpperCase() + sentence.slice(1) + '.';
   };
 
-  const autoSendSentence = () => {
+  const autoSendSentence = async () => {
     if (isBuildingSentence.current && sentenceGestures.current.length > 0 && !isSTTActive.current) {
-      const newSentence = getFormattedSentence(sentenceGestures.current);
-      const sentenceNumber = sentenceCounter + 1;
-      const numberedSentence = `${sentenceNumber}. ${newSentence}`;
+      const words = [...sentenceGestures.current]; // Copy the words
       
-      setLocalSentenceHistory(prev => {
-        const updated = [...prev, numberedSentence];
-        return updated.slice(-MAX_DISPLAYED_SENTENCES);
-      });
-      setLocalSentence(numberedSentence);
-      setSentenceCounter(sentenceNumber);
-      
-      console.log('Local sentence auto-sent after 3 seconds:', numberedSentence);
-      
-      // Send sentence to remote participant
-      const isConnected = callStatusRef.current === 'connected' || 
-        (peerConnection.current && peerConnection.current.connectionState === 'connected');
-      
-      if (isConnected) {
-        console.log('Sending sentence to remote:', numberedSentence);
-        socketService.sendGestureData(contact.id, { 
-          text: numberedSentence,
-          type: 'sentence'
+      try {
+        console.log('Generating sentence with Gemini API for words:', words);
+        
+        // Call Gemini API to generate proper sentence
+        const generatedSentence = await geminiService.generateSentence(words);
+        const sentenceNumber = sentenceCounter + 1;
+        const numberedSentence = `${sentenceNumber}. ${generatedSentence}`;
+        
+        setLocalSentenceHistory(prev => {
+          const updated = [...prev, numberedSentence];
+          return updated.slice(-MAX_DISPLAYED_SENTENCES);
         });
+        setLocalSentence(numberedSentence);
+        setSentenceCounter(sentenceNumber);
+        
+        console.log('Local sentence generated and sent:', generatedSentence);
+        
+        // Send sentence to remote participant
+        const isConnected = callStatusRef.current === 'connected' || 
+          (peerConnection.current && peerConnection.current.connectionState === 'connected');
+        
+        if (isConnected) {
+          console.log('Sending generated sentence to remote:', numberedSentence);
+          socketService.sendGestureData(contact.id, { 
+            text: numberedSentence,
+            type: 'sentence'
+          });
+        }
+      } catch (error) {
+        console.error('Error generating sentence with Gemini:', error);
+        
+        // Fallback to simple formatting if Gemini fails
+        const fallbackSentence = getFormattedSentence(words);
+        const sentenceNumber = sentenceCounter + 1;
+        const numberedSentence = `${sentenceNumber}. ${fallbackSentence}`;
+        
+        setLocalSentenceHistory(prev => {
+          const updated = [...prev, numberedSentence];
+          return updated.slice(-MAX_DISPLAYED_SENTENCES);
+        });
+        setLocalSentence(numberedSentence);
+        setSentenceCounter(sentenceNumber);
+        
+        const isConnected = callStatusRef.current === 'connected' || 
+          (peerConnection.current && peerConnection.current.connectionState === 'connected');
+        
+        if (isConnected) {
+          socketService.sendGestureData(contact.id, { 
+            text: numberedSentence,
+            type: 'sentence'
+          });
+        }
       }
       
       // Reset sentence building state
@@ -156,34 +188,62 @@ const VideoCallScreen = () => {
         if (noHandsTimeoutRef.current) {
           clearTimeout(noHandsTimeoutRef.current);
         }
-        noHandsTimeoutRef.current = setTimeout(() => {
+        noHandsTimeoutRef.current = setTimeout(async () => {
           if (isBuildingSentence.current && sentenceGestures.current.length > 0 && !isSTTActive.current) {
-            // Finalize sentence
-            const newSentence = getFormattedSentence(sentenceGestures.current);
-            const sentenceNumber = sentenceCounter + 1;
-            const numberedSentence = `${sentenceNumber}. ${newSentence}`;
+            const words = [...sentenceGestures.current]; // Copy the words
             
-            setLocalSentenceHistory(prev => {
-              const updated = [...prev, numberedSentence];
-              return updated.slice(-MAX_DISPLAYED_SENTENCES);
-            });
-            setLocalSentence(numberedSentence);
-            setSentenceCounter(sentenceNumber);
-            
-            console.log('Local sentence finalized via timeout:', newSentence);
-            
-            // Send sentence to remote participant
-            const isConnected = callStatusRef.current === 'connected' || 
-              (peerConnection.current && peerConnection.current.connectionState === 'connected');
-            
-            if (isConnected) {
-              console.log('Sending sentence to remote:', numberedSentence);
-              socketService.sendGestureData(contact.id, { 
-                text: numberedSentence,
-                type: 'sentence'
+            try {
+              console.log('Generating sentence with Gemini API (timeout) for words:', words);
+              
+              // Call Gemini API to generate proper sentence
+              const generatedSentence = await geminiService.generateSentence(words);
+              const sentenceNumber = sentenceCounter + 1;
+              const numberedSentence = `${sentenceNumber}. ${generatedSentence}`;
+              
+              setLocalSentenceHistory(prev => {
+                const updated = [...prev, numberedSentence];
+                return updated.slice(-MAX_DISPLAYED_SENTENCES);
               });
-            } else {
-              console.log('Not sending sentence - call not connected. Status:', callStatusRef.current, 'Peer state:', peerConnection.current?.connectionState);
+              setLocalSentence(numberedSentence);
+              setSentenceCounter(sentenceNumber);
+              
+              console.log('Local sentence finalized via timeout:', generatedSentence);
+              
+              // Send sentence to remote participant
+              const isConnected = callStatusRef.current === 'connected' || 
+                (peerConnection.current && peerConnection.current.connectionState === 'connected');
+              
+              if (isConnected) {
+                console.log('Sending generated sentence to remote:', numberedSentence);
+                socketService.sendGestureData(contact.id, { 
+                  text: numberedSentence,
+                  type: 'sentence'
+                });
+              }
+            } catch (error) {
+              console.error('Error generating sentence with Gemini (timeout):', error);
+              
+              // Fallback to simple formatting
+              const fallbackSentence = getFormattedSentence(words);
+              const sentenceNumber = sentenceCounter + 1;
+              const numberedSentence = `${sentenceNumber}. ${fallbackSentence}`;
+              
+              setLocalSentenceHistory(prev => {
+                const updated = [...prev, numberedSentence];
+                return updated.slice(-MAX_DISPLAYED_SENTENCES);
+              });
+              setLocalSentence(numberedSentence);
+              setSentenceCounter(sentenceNumber);
+              
+              const isConnected = callStatusRef.current === 'connected' || 
+                (peerConnection.current && peerConnection.current.connectionState === 'connected');
+              
+              if (isConnected) {
+                socketService.sendGestureData(contact.id, { 
+                  text: numberedSentence,
+                  type: 'sentence'
+                });
+              }
             }
             
             // Reset sentence building state
@@ -395,6 +455,12 @@ const VideoCallScreen = () => {
       console.log('Creating peer connection...');
       peerConnection.current = new RTCPeerConnection({
         iceServers: [
+          { urls: 'stun:13.61.128.117:3478' },
+          { 
+            urls: 'turn:13.61.128.117:3478?transport=tcp',
+            username: 'abdullah',
+            credential: '029Signoff'
+          },  
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
         ],
@@ -617,6 +683,7 @@ const VideoCallScreen = () => {
       return granted === PermissionsAndroid.RESULTS.GRANTED;
     } catch (err) {
       console.error('Permission request error:', err);
+      Alert.alert('Permission Error', 'Unable to request microphone permission. Please enable it manually in settings.');
       return false;
     }
   };
@@ -708,7 +775,7 @@ const VideoCallScreen = () => {
       console.log('Camera switched to:', newFacingMode);
     } catch (error) {
       console.error('Error switching camera:', error);
-      Alert.alert('Error', 'Failed to switch camera');
+      Alert.alert('Camera Error', 'Unable to switch camera. Please try again or restart the app.');
     }
   };
 
@@ -1169,35 +1236,36 @@ const VideoCallScreen = () => {
       {!!localSentence && (
         <View style={styles.localSentenceOverlay}>
           <Text style={styles.sentenceLabel}>Your Sentence:</Text>
-          <Text style={styles.sentenceText}>{localSentence}</Text>
+          <Text style={styles.sentenceText}>{localSentence.replace(/^\d+\.\s*/, '')}</Text>
         </View>
       )}
       
       {/* Sentence History */}
       {remoteSentenceHistory.length > 0 && (
-        <View style={styles.remoteSentenceHistoryOverlay}>
-          <Text style={styles.historyLabel}>Remote Recent Sentences:</Text>
-          <ScrollView 
-            style={styles.historyScrollView}
-            showsVerticalScrollIndicator={true}
-            nestedScrollEnabled={true}
-          >
-            {remoteSentenceHistory.map((sentence, index) => (
-              <View key={index} style={styles.sentenceItem}>
-                <Text style={styles.historyText}>{sentence}</Text>
+        <ScrollView 
+          style={styles.remoteSentenceHistoryOverlay}
+          showsVerticalScrollIndicator={true}
+          nestedScrollEnabled={true}
+        >
+          {remoteSentenceHistory.map((sentence, index) => {
+            // Remove numbering from sentence
+            const textWithoutNumber = sentence.replace(/^\d+\.\s*/, '');
+            return (
+              <View key={index} style={styles.sentenceItemClean}>
+                <Text style={styles.historyTextClean}>{textWithoutNumber}</Text>
                 <TouchableOpacity
-                  style={styles.speakerButton}
+                  style={styles.speakerButtonClean}
                   onPress={() => speakSentence(sentence)}
                   disabled={isSpeaking}
                 >
-                  <Text style={[styles.speakerButtonText, isSpeaking && styles.speakerButtonDisabled]}>
+                  <Text style={[styles.speakerButtonTextClean, isSpeaking && styles.speakerButtonDisabled]}>
                     🔊
                   </Text>
                 </TouchableOpacity>
               </View>
-            ))}
-          </ScrollView>
-        </View>
+            );
+          })}
+        </ScrollView>
       )}
       
       {/* Top Section - User Name and Timer */}
@@ -1392,7 +1460,7 @@ const getStyles = (theme) => StyleSheet.create({
     position: 'absolute', 
     top: 20, 
     left: 20, 
-    backgroundColor: 'rgba(0,150,0,0.8)', 
+    backgroundColor: 'transparent', 
     paddingHorizontal: 12, 
     paddingVertical: 6, 
     borderRadius: 8,
@@ -1409,21 +1477,27 @@ const getStyles = (theme) => StyleSheet.create({
     zIndex: 10,
   },
   overlayLabel: { 
-    color: '#fff', 
-    fontSize: 12, 
+    color: '#7C01F6', 
+    fontSize: 16, 
     fontWeight: '500', 
-    marginBottom: 2 
+    marginBottom: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   overlayText: { 
     color: '#fff', 
     fontSize: 16, 
-    fontWeight: '600' 
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   currentSentenceOverlay: { 
     position: 'absolute', 
     top: 200, 
     left: 20, 
-    backgroundColor: 'rgba(255, 165, 0, 0.9)', 
+    backgroundColor: 'transparent', 
     paddingHorizontal: 15, 
     paddingVertical: 10, 
     borderRadius: 10,
@@ -1431,10 +1505,13 @@ const getStyles = (theme) => StyleSheet.create({
     maxWidth: '70%',
   },
   currentSentenceLabel: { 
-    color: '#fff', 
-    fontSize: 12, 
+    color: '#7C01F6', 
+    fontSize: 16, 
     fontWeight: '600', 
-    marginBottom: 4 
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   currentSentenceText: { 
     color: '#fff', 
@@ -1442,18 +1519,24 @@ const getStyles = (theme) => StyleSheet.create({
     fontWeight: '700',
     lineHeight: 20,
     marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   currentSentenceHint: { 
     color: '#fff', 
     fontSize: 10, 
     fontWeight: '500',
     fontStyle: 'italic',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   speechToTextOverlay: { 
     position: 'absolute', 
     top: 150, 
     left: 20, 
-    backgroundColor: 'rgba(255, 0, 150, 0.9)', 
+    backgroundColor: 'transparent', 
     paddingHorizontal: 15, 
     paddingVertical: 10, 
     borderRadius: 10,
@@ -1464,19 +1547,25 @@ const getStyles = (theme) => StyleSheet.create({
     color: '#fff', 
     fontSize: 14, 
     fontWeight: '700', 
-    marginBottom: 4 
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   speechToTextHint: { 
     color: '#fff', 
     fontSize: 10, 
     fontWeight: '500',
     fontStyle: 'italic',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   localSentenceOverlay: { 
     position: 'absolute', 
     top: 120, 
     left: 20, 
-    backgroundColor: 'rgba(0,150,0,0.9)', 
+    backgroundColor: 'transparent', 
     paddingHorizontal: 15, 
     paddingVertical: 10, 
     borderRadius: 10,
@@ -1495,22 +1584,28 @@ const getStyles = (theme) => StyleSheet.create({
     maxWidth: '70%',
   },
   sentenceLabel: { 
-    color: '#fff', 
-    fontSize: 12, 
+    color: '#7C01F6', 
+    fontSize: 16, 
     fontWeight: '600', 
-    marginBottom: 4 
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   sentenceText: { 
     color: '#fff', 
     fontSize: 18, 
     fontWeight: '700',
     lineHeight: 22,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   localSentenceHistoryOverlay: { 
     position: 'absolute', 
     bottom: 200, 
     left: 20, 
-    backgroundColor: 'rgba(0,150,0,0.8)', 
+    backgroundColor: 'transparent', 
     paddingHorizontal: 12, 
     paddingVertical: 8, 
     borderRadius: 8,
@@ -1522,13 +1617,10 @@ const getStyles = (theme) => StyleSheet.create({
     position: 'absolute', 
     bottom: 120, 
     left: 20, 
-    backgroundColor: 'rgba(0,100,200,0.8)', 
-    paddingHorizontal: 12, 
-    paddingVertical: 8, 
-    borderRadius: 8,
+    right: 20,
     zIndex: 10,
-    maxWidth: '60%',
-    maxHeight: 120,
+    maxHeight: 180,
+    paddingRight: 0,
   },
   historyScrollView: {
     maxHeight: 80,
@@ -1537,7 +1629,10 @@ const getStyles = (theme) => StyleSheet.create({
     color: '#fff', 
     fontSize: 10, 
     fontWeight: '600', 
-    marginBottom: 4 
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   historyText: { 
     color: '#fff', 
@@ -1547,6 +1642,9 @@ const getStyles = (theme) => StyleSheet.create({
     lineHeight: 16,
     paddingVertical: 1,
     flex: 1,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   sentenceItem: {
     flexDirection: 'row',
@@ -1557,6 +1655,37 @@ const getStyles = (theme) => StyleSheet.create({
     marginVertical: 2,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 6,
+  },
+  sentenceItemClean: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginVertical: 3,
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+    width: '100%',
+  },
+  historyTextClean: { 
+    color: '#fff', 
+    fontSize: 15, 
+    fontWeight: '600',
+    lineHeight: 20,
+    flex: 1,
+    flexShrink: 1,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  speakerButtonClean: {
+    padding: 6,
+    marginLeft: 10,
+    flexShrink: 0,
+  },
+  speakerButtonTextClean: {
+    fontSize: 16,
+    color: '#fff',
   },
   speakerButton: {
     padding: 6,

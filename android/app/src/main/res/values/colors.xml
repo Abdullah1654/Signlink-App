@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="mp_color_primary">#007F8B</color>
-    <color name="mp_color_primary_variant">#12B5CB</color>
-    <color name="mp_color_primary_dark">#00676D</color>
+    <color name="mp_color_primary">#7C01F6</color>
+    <color name="mp_color_primary_variant">#8B5CF6</color>
+    <color name="mp_color_primary_dark">#6B00D9</color>
     <color name="mp_color_secondary">#FBBC04</color>
     <color name="mp_color_secondary_variant">#F9AB00</color>
     <color name="mp_color_error">#B00020</color>

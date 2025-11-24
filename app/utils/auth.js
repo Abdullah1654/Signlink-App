@@ -45,9 +45,13 @@ export async function isAuthenticated() {
 
 export async function updateProfilePicture(imageUri) {
   try {
+    if (!imageUri || !imageUri.trim()) {
+      throw new Error('Image is required');
+    }
+    
     const credentials = await Keychain.getGenericPassword();
     if (!credentials || !credentials.password) {
-      throw new Error('No token found');
+      throw new Error('Not authenticated. Please sign in again.');
     }
 
     const formData = new FormData();
@@ -75,16 +79,51 @@ export async function updateProfilePicture(imageUri) {
   }
 }
 
-export async function updateProfile(firstName, lastName) {
+export async function deleteProfilePicture() {
   try {
     const credentials = await Keychain.getGenericPassword();
     if (!credentials || !credentials.password) {
-      throw new Error('No token found');
+      throw new Error('Not authenticated. Please sign in again.');
+    }
+
+    const response = await axios.delete(
+      `${API_BASE_URL}/auth/delete-profile-picture`,
+      {
+        headers: {
+          Authorization: `Bearer ${credentials.password}`,
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function updateProfile(firstName, lastName) {
+  try {
+    if (!firstName || !firstName.trim()) {
+      throw new Error('First name is required');
+    }
+    if (!lastName || !lastName.trim()) {
+      throw new Error('Last name is required');
+    }
+    if (firstName.trim().length < 2) {
+      throw new Error('First name must be at least 2 characters');
+    }
+    if (lastName.trim().length < 2) {
+      throw new Error('Last name must be at least 2 characters');
+    }
+    
+    const credentials = await Keychain.getGenericPassword();
+    if (!credentials || !credentials.password) {
+      throw new Error('Not authenticated. Please sign in again.');
     }
 
     const response = await axios.put(
       `${API_BASE_URL}/auth/update-profile`,
-      { firstName, lastName },
+      { firstName: firstName.trim(), lastName: lastName.trim() },
       {
         headers: {
           Authorization: `Bearer ${credentials.password}`,

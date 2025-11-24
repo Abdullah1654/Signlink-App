@@ -81,8 +81,8 @@ const Toast = ({
         };
       case 'info':
         return {
-          backgroundColor: '#3B82F6',
-          borderColor: '#2563EB',
+          backgroundColor: '#8B5CF6',
+          borderColor: '#7C3AED',
         };
       default:
         return {

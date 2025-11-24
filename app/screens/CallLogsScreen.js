@@ -31,9 +31,10 @@ export default function CallLogsScreen({ navigation }) {
   const fetchCallLogs = async () => {
     try {
       const logsData = await contactsService.getCallLogs();
-      setCallLogs(logsData);
+      setCallLogs(logsData || []);
     } catch (error) {
       console.error('Error fetching call logs:', error);
+      // Silently fail - user will see empty state instead of error popup
     }
   };
 
@@ -54,9 +55,12 @@ export default function CallLogsScreen({ navigation }) {
   const fetchCurrentUser = async () => {
     try {
       const userData = await getCurrentUser();
-      setCurrentUser(userData);
+      if (userData) {
+        setCurrentUser(userData);
+      }
     } catch (error) {
       console.error('Error fetching current user:', error);
+      // Silently fail - profile picture will show default
     }
   };
 

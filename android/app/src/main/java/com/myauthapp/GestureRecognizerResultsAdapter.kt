@@ -266,10 +266,20 @@ class GestureRecognizerResultsAdapter(private val context: Context) : RecyclerVi
     
     @SuppressLint("NotifyDataSetChanged")
     fun addSpokenSentence(text: String) {
-        if (text.isNotEmpty() && !isTrivialSentence(text)) {
-            sentences.add(text)
-            Log.d(TAG, "Added spoken sentence: $text, All sentences: $sentences")
-            notifyDataSetChanged()
+        try {
+            val trimmedText = text.trim()
+            if (trimmedText.isNotEmpty() && !isTrivialSentence(trimmedText)) {
+                sentences.add(trimmedText)
+                Log.d(TAG, "Added spoken sentence: $trimmedText, All sentences: $sentences")
+                notifyDataSetChanged()
+                
+                // Notify parent about sentence update
+                onSentenceUpdate?.invoke(trimmedText)
+            } else {
+                Log.d(TAG, "Skipped trivial or empty sentence: $trimmedText")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error adding spoken sentence: ${e.message}")
         }
     }
 
@@ -281,32 +291,48 @@ class GestureRecognizerResultsAdapter(private val context: Context) : RecyclerVi
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        // Only show sentences in RecyclerView now
-        val sentence = sentences.getOrNull(position)
-        holder.bind(sentence, position + 1)
+        try {
+            // Only show sentences in RecyclerView now
+            val sentence = sentences.getOrNull(position)
+            holder.bind(sentence, position + 1)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error binding view holder at position $position: ${e.message}")
+        }
     }
 
     override fun getItemCount(): Int = sentences.size
 
     inner class ViewHolder(private val binding: ItemGestureRecognizerResultBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(sentence: String?, sentenceIndex: Int) {
-            with(binding) {
-                tvLabel.text = if (sentence != null) "${sentenceIndex}. $sentence" else NO_VALUE
-                tvScore.visibility = android.view.View.GONE // No scores for sentences
-                tvLabel.setTextColor(0xFF000000.toInt())
-                tvLabel.setTypeface(null, android.graphics.Typeface.BOLD)
-                tvLabel.textSize = 18f
-                
-                // Show TTS button for valid sentences
-                btnTts.visibility = if (sentence != null && sentence.isNotEmpty()) 
-                    android.view.View.VISIBLE else android.view.View.GONE
-                
-                // Set up TTS button click listener
-                btnTts.setOnClickListener {
-                    sentence?.let { text ->
-                        ttsHelper?.speak(text)
+            try {
+                with(binding) {
+                    tvLabel.text = if (sentence != null && sentence.isNotBlank()) "${sentenceIndex}. $sentence" else NO_VALUE
+                    tvScore.visibility = android.view.View.GONE // No scores for sentences
+                    tvLabel.setTextColor(0xFF000000.toInt())
+                    tvLabel.setTypeface(null, android.graphics.Typeface.BOLD)
+                    tvLabel.textSize = 18f
+                    
+                    // Show TTS button for valid sentences
+                    btnTts.visibility = if (sentence != null && sentence.isNotBlank()) 
+                        android.view.View.VISIBLE else android.view.View.GONE
+                    
+                    // Set up TTS button click listener with error handling
+                    btnTts.setOnClickListener {
+                        try {
+                            sentence?.let { text ->
+                                if (text.isNotBlank()) {
+                                    ttsHelper?.speak(text)
+                                } else {
+                                    Log.w(TAG, "Cannot speak empty sentence")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error in TTS button click: ${e.message}")
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error binding sentence: ${e.message}")
             }
         }
     }

@@ -11,13 +11,15 @@ import {
   Animated,
   Dimensions,
   TextInput,
+  Modal,
 } from 'react-native';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
-import { logout, getCurrentUser, updateProfilePicture, isAuthenticated, deleteAccount, updateProfile } from '../utils/auth';
+import { logout, getCurrentUser, updateProfilePicture, isAuthenticated, deleteAccount, updateProfile, deleteProfilePicture } from '../utils/auth';
 import socketService from '../utils/socketService';
 import callStateManager from '../utils/callStateManager';
 import { useToast } from '../utils/toastService';
 import { useTheme, createThemedStyles } from '../utils/themeService';
+import ImagePickerModal from '../components/ImagePickerModal';
 
 // Use the same API base URL as in auth.js
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://signlink-backend.onrender.com';
@@ -29,10 +31,13 @@ export default function ProfileScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletingPhoto, setDeletingPhoto] = useState(false);
   const [editing, setEditing] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [imagePickerVisible, setImagePickerVisible] = useState(false);
+  const [deletePhotoModalVisible, setDeletePhotoModalVisible] = useState(false);
   const { showSuccess, showError } = useToast();
   const { theme, isDark, toggleTheme } = useTheme();
   const styles = createThemedStyles(getStyles)(theme);
@@ -123,15 +128,7 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const showImagePicker = () => {
-    Alert.alert(
-      'Select Profile Picture',
-      'Choose an option',
-      [
-        { text: 'Camera', onPress: () => openCamera() },
-        { text: 'Gallery', onPress: () => openGallery() },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    setImagePickerVisible(true);
   };
 
   const openCamera = () => {
@@ -171,7 +168,8 @@ export default function ProfileScreen({ navigation }) {
           showSuccess('Profile picture updated successfully!');
         } catch (error) {
           console.error('Error updating profile picture:', error);
-          showError('Failed to update profile picture');
+          const errorMessage = error.response?.data?.error || 'Unable to update profile picture. Please try again.';
+          showError(errorMessage);
         } finally {
           setUploading(false);
         }
@@ -253,7 +251,17 @@ export default function ProfileScreen({ navigation }) {
       }, 1500);
     } catch (error) {
       console.error('Error deleting account:', error);
-      showError('Failed to delete account. Please try again.');
+      let errorMessage = 'Unable to delete account. Please try again.';
+      
+      if (error.response?.status === 401) {
+        errorMessage = 'Your session has expired. Please sign in again.';
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (!error.response) {
+        errorMessage = 'No internet connection. Please check your network and try again.';
+      }
+      
+      showError(errorMessage);
     } finally {
       setDeleting(false);
     }
@@ -275,21 +283,56 @@ export default function ProfileScreen({ navigation }) {
 
   const handleSaveProfile = async () => {
     if (!firstName.trim() || !lastName.trim()) {
-      showError('First name and last name are required');
+      showError('Both first name and last name are required');
+      return;
+    }
+
+    if (firstName.trim().length < 2 || lastName.trim().length < 2) {
+      showError('Names must be at least 2 characters long');
       return;
     }
 
     try {
       setUpdating(true);
       const result = await updateProfile(firstName.trim(), lastName.trim());
-      setUser(result.user);
-      setEditing(false);
-      showSuccess('Profile updated successfully!');
+      if (result && result.user) {
+        setUser(result.user);
+        setEditing(false);
+        showSuccess('Profile updated successfully!');
+      } else {
+        throw new Error('Invalid response from server');
+      }
     } catch (error) {
       console.error('Error updating profile:', error);
-      showError('Failed to update profile. Please try again.');
+      const errorMessage = error.response?.data?.error || 'Unable to update profile. Please try again.';
+      showError(errorMessage);
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleDeleteProfilePicture = () => {
+    if (!user?.photo) {
+      showError('No profile picture to delete');
+      return;
+    }
+
+    setDeletePhotoModalVisible(true);
+  };
+
+  const executeDeleteProfilePicture = async () => {
+    try {
+      setDeletingPhoto(true);
+      const result = await deleteProfilePicture();
+      if (result && result.user) {
+        setUser(result.user);
+        showSuccess('Profile picture deleted successfully!');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Unable to delete profile picture. Please try again.';
+      showError(errorMessage);
+    } finally {
+      setDeletingPhoto(false);
     }
   };
 
@@ -404,7 +447,7 @@ export default function ProfileScreen({ navigation }) {
           <TouchableOpacity 
             style={styles.profileImageContainer} 
             onPress={showImagePicker}
-            disabled={uploading}
+            disabled={uploading || deletingPhoto}
           >
             {user?.photo ? (
               <Image
@@ -420,10 +463,28 @@ export default function ProfileScreen({ navigation }) {
                 <ActivityIndicator size="small" color="#fff" />
               </View>
             )}
+            {deletingPhoto && (
+              <View style={styles.uploadingOverlay}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.deletingPhotoText}>Deleting...</Text>
+              </View>
+            )}
           </TouchableOpacity>
           
           <Text style={styles.userName}>{user?.name || 'No name provided'}</Text>
           <Text style={styles.userEmail}>{user?.email || 'No email provided'}</Text>
+          
+          {editing && user?.photo && (
+            <TouchableOpacity 
+              style={styles.deletePhotoButtonLarge}
+              onPress={handleDeleteProfilePicture}
+              disabled={deletingPhoto || uploading}
+            >
+              <Text style={styles.deletePhotoButtonText}>
+                {deletingPhoto ? 'Deleting Photo...' : '🗑️ Delete Profile Picture'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* User Info Card */}
@@ -477,27 +538,90 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
 
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity 
-              style={[styles.button, styles.logoutButton]}
-              onPress={() => logout(navigation)}
-            >
-              <Text style={styles.buttonText}>Logout</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.button, styles.deleteButton]}
-              onPress={handleDeleteAccount}
-              disabled={deleting}
-            >
-              <Text style={styles.buttonText}>
-                {deleting ? "Deleting..." : "Delete Account"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {editing ? (
+            <View style={styles.editButtonContainer}>
+              <TouchableOpacity 
+                style={[styles.button, styles.deleteProfileButton]}
+                onPress={handleDeleteAccount}
+                disabled={deleting || updating}
+              >
+                <Text style={styles.buttonText}>
+                  {deleting ? "Deleting..." : "Delete Profile"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity 
+                style={[styles.button, styles.logoutButton]}
+                onPress={() => logout(navigation)}
+              >
+                <Text style={styles.buttonText}>Logout</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.button, styles.deleteButton]}
+                onPress={handleDeleteAccount}
+                disabled={deleting}
+              >
+                <Text style={styles.buttonText}>
+                  {deleting ? "Deleting..." : "Delete Account"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
 
+      <ImagePickerModal
+        visible={imagePickerVisible}
+        onClose={() => setImagePickerVisible(false)}
+        onCamera={openCamera}
+        onGallery={openGallery}
+        onDelete={handleDeleteProfilePicture}
+        hasPhoto={!!user?.photo}
+      />
+
+      {/* Delete Photo Confirmation Modal */}
+      <Modal
+        visible={deletePhotoModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDeletePhotoModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <View style={styles.deleteModalIconContainer}>
+              <Text style={styles.deleteModalIcon}>🗑️</Text>
+            </View>
+            <Text style={styles.deleteModalTitle}>Delete Profile Picture</Text>
+            <Text style={styles.deleteModalMessage}>
+              Are you sure you want to delete your profile picture?
+            </Text>
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteModalCancelButton]}
+                onPress={() => setDeletePhotoModalVisible(false)}
+                disabled={deletingPhoto}
+              >
+                <Text style={styles.deleteModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteModalDeleteButton]}
+                onPress={() => {
+                  setDeletePhotoModalVisible(false);
+                  executeDeleteProfilePicture();
+                }}
+                disabled={deletingPhoto}
+              >
+                <Text style={styles.deleteModalDeleteText}>
+                  {deletingPhoto ? 'Deleting...' : 'Delete'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -614,6 +738,9 @@ const getStyles = (theme) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  deletePhotoButton: {
+    backgroundColor: '#DC2626',
+  },
   editIcon: {
     fontSize: 16,
     color: '#fff',
@@ -662,6 +789,30 @@ const getStyles = (theme) => StyleSheet.create({
     borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  deletingPhotoText: {
+    color: '#fff',
+    fontSize: 12,
+    marginTop: 5,
+    fontWeight: '500',
+  },
+  deletePhotoButtonLarge: {
+    marginTop: 15,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#DC2626',
+    borderRadius: 20,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  deletePhotoButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   userName: {
     fontSize: 24,
@@ -729,6 +880,11 @@ const getStyles = (theme) => StyleSheet.create({
     marginTop: 0,
     marginBottom: 0,
   },
+  editButtonContainer: {
+    width: '100%',
+    marginTop: 0,
+    marginBottom: 0,
+  },
   button: {
     flex: 1,
     backgroundColor: theme.colors.buttonPrimary,
@@ -741,6 +897,10 @@ const getStyles = (theme) => StyleSheet.create({
   },
   deleteButton: {
     backgroundColor: theme.colors.error,
+  },
+  deleteProfileButton: {
+    backgroundColor: '#DC2626',
+    width: '100%',
   },
   buttonText: { 
     color: "#fff", 
@@ -778,6 +938,88 @@ const getStyles = (theme) => StyleSheet.create({
     fontSize: 16,
     marginTop: 10,
     fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  deleteModalContent: {
+    backgroundColor: theme.colors.background,
+    borderRadius: 25,
+    padding: 30,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 38, 38, 0.3)',
+  },
+  deleteModalIconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(220, 38, 38, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  deleteModalIcon: {
+    fontSize: 36,
+  },
+  deleteModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  deleteModalMessage: {
+    fontSize: 15,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 25,
+    lineHeight: 22,
+  },
+  deleteModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  deleteModalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteModalCancelButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  deleteModalDeleteButton: {
+    backgroundColor: '#DC2626',
+  },
+  deleteModalCancelText: {
+    color: theme.colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteModalDeleteText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

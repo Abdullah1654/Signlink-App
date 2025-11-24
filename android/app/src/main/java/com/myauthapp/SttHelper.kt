@@ -65,10 +65,18 @@ class SttHelper(private val context: Context) : RecognitionListener {
     
     fun stopListening() {
         mainHandler.post {
-            speechRecognizer?.stopListening()
-            isListening = false
-            onListeningStateChanged?.invoke(false)
-            Log.d("SttHelper", "Stopped listening for speech")
+            try {
+                if (isListening) {
+                    speechRecognizer?.stopListening()
+                    isListening = false
+                    onListeningStateChanged?.invoke(false)
+                    Log.d("SttHelper", "Stopped listening for speech")
+                }
+            } catch (e: Exception) {
+                Log.e("SttHelper", "Error stopping speech recognition: ${e.message}")
+                isListening = false
+                onListeningStateChanged?.invoke(false)
+            }
         }
     }
     
@@ -102,16 +110,16 @@ class SttHelper(private val context: Context) : RecognitionListener {
         onListeningStateChanged?.invoke(false)
         
         val errorMessage = when (error) {
-            SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
-            SpeechRecognizer.ERROR_CLIENT -> "Client side error"
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Insufficient permissions"
-            SpeechRecognizer.ERROR_NETWORK -> "Network error"
-            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
-            SpeechRecognizer.ERROR_NO_MATCH -> "No speech input matched"
-            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognition service busy"
-            SpeechRecognizer.ERROR_SERVER -> "Server sends error status"
-            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input"
-            else -> "Unknown error occurred"
+            SpeechRecognizer.ERROR_AUDIO -> "Microphone issue. Please try again"
+            SpeechRecognizer.ERROR_CLIENT -> "Please try again"
+            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission needed"
+            SpeechRecognizer.ERROR_NETWORK -> "Network issue. Please try again"
+            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Connection timeout. Please try again"
+            SpeechRecognizer.ERROR_NO_MATCH -> "Couldn't hear you. Please speak again"
+            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Please wait and try again"
+            SpeechRecognizer.ERROR_SERVER -> "Service unavailable. Please try again"
+            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Didn't catch that. Please speak again"
+            else -> "Something went wrong. Please try again"
         }
         
         Log.e("SttHelper", "Speech recognition error: $errorMessage")
@@ -142,10 +150,16 @@ class SttHelper(private val context: Context) : RecognitionListener {
     
     fun cleanup() {
         mainHandler.post {
-            stopListening()
-            speechRecognizer?.destroy()
-            speechRecognizer = null
-            Log.d("SttHelper", "STT helper cleaned up")
+            try {
+                stopListening()
+                speechRecognizer?.destroy()
+                speechRecognizer = null
+                Log.d("SttHelper", "STT helper cleaned up")
+            } catch (e: Exception) {
+                Log.e("SttHelper", "Error during cleanup: ${e.message}")
+                speechRecognizer = null
+                isListening = false
+            }
         }
     }
 }

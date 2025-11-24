@@ -13,6 +13,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
+import { useFocusEffect } from '@react-navigation/native';
 import axios from "axios";
 import * as Keychain from 'react-native-keychain';
 import GoogleSignInButton from "../components/GoogleSignInButton";
@@ -38,6 +39,14 @@ export default function SignUpScreen({ navigation }) {
   // Animation values for circles
   const circle1Anim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const circle2Anim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+
+  // Clear errors when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Clear errors when navigating back to this screen
+      setErrors({});
+    }, [])
+  );
 
   // Consistent circular movement animation for circles
   useEffect(() => {
@@ -126,7 +135,18 @@ export default function SignUpScreen({ navigation }) {
       console.error('Error response:', err.response?.data);
       console.error('Error status:', err.response?.status);
       
-      const errorMessage = err.response?.data?.error || err.message || "Signup failed";
+      let errorMessage = 'Unable to create account. Please try again.';
+      
+      if (err.response?.status === 400) {
+        errorMessage = err.response?.data?.error || 'Invalid information provided. Please check all fields.';
+      } else if (err.response?.status === 409) {
+        errorMessage = 'An account with this email already exists. Please sign in instead.';
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (!err.response) {
+        errorMessage = 'No internet connection. Please check your network and try again.';
+      }
+      
       setErrors({ api: errorMessage });
     } finally {
       setIsLoading(false);
@@ -196,6 +216,7 @@ export default function SignUpScreen({ navigation }) {
                   value={firstName}
                   onChangeText={setFirstName}
                 />
+                {errors.firstName && <Text style={styles.error}>{errors.firstName}</Text>}
               </View>
               <View style={styles.inputGroupRow}>
                 <Text style={styles.label}>Last Name</Text>
@@ -206,10 +227,9 @@ export default function SignUpScreen({ navigation }) {
                   value={lastName}
                   onChangeText={setLastName}
                 />
+                {errors.lastName && <Text style={styles.error}>{errors.lastName}</Text>}
               </View>
             </View>
-            {errors.firstName && <Text style={styles.error}>{errors.firstName}</Text>}
-            {errors.lastName && <Text style={styles.error}>{errors.lastName}</Text>}
           </View>
 
           <View style={styles.inputGroup}>
@@ -391,7 +411,7 @@ const getStyles = (theme) => StyleSheet.create({
     backdropFilter: 'blur(10px)',
   },
   rowContainer: {
-    marginBottom: 0,
+    marginBottom: 15,
   },
   row: { 
     flexDirection: "row", 
@@ -404,7 +424,6 @@ const getStyles = (theme) => StyleSheet.create({
   inputGroupRow: {
     flex: 1,
     marginHorizontal: 4,
-    marginBottom: 15,
   },
   label: {
     fontSize: 14,

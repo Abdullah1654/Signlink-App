@@ -1,13 +1,16 @@
 //google sign in button for login and sign up
 import React, { useEffect } from 'react';
 import { TouchableOpacity, Alert, Text, View, StyleSheet, Image } from 'react-native';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import * as Keychain from 'react-native-keychain';
 import axios from 'axios';
+import { useToast } from '../utils/toastService';
 
 const API = process.env.REACT_APP_API_BASE_URL || 'https://signlink-backend.onrender.com';
 
 export default function GoogleSignInButton({ navigation, screenType = 'signin' }) {
+  const { showInfo, showError } = useToast();
+  
   useEffect(() => {
     // 👇 Test backend connection
     console.log('Connecting to backend on ', API)
@@ -27,7 +30,9 @@ export default function GoogleSignInButton({ navigation, screenType = 'signin' }
       // ✅ Correct token path
       const idToken = userInfo?.data?.idToken;
       if (!idToken) {
-        Alert.alert("Google Sign-In Error", "No idToken received");
+        // User cancelled the sign-in - show subtle info message
+        console.log("Google sign-in cancelled by user");
+        showInfo("Sign-in cancelled");
         return;
       }
 
@@ -41,8 +46,34 @@ export default function GoogleSignInButton({ navigation, screenType = 'signin' }
       await Keychain.setGenericPassword('authToken', token);
       navigation.replace('ContactsList');
     } catch (err) {
+      // Check if user cancelled the operation
+      if (err.code === statusCodes.SIGN_IN_CANCELLED || 
+          err.code === statusCodes.IN_PROGRESS ||
+          err.message?.includes('SIGN_IN_CANCELLED') ||
+          err.message?.includes('cancel')) {
+        // User cancelled - show subtle info message instead of error
+        console.log("Google sign-in cancelled by user");
+        showInfo("Sign-in cancelled");
+        return;
+      }
+      
+      // Handle other errors with user-friendly messages
       console.error("Google sign-in error:", err.response?.data || err.message);
-      Alert.alert("Google sign-in failed", err.message || "Check console");
+      
+      let errorMessage = 'Unable to sign in with Google. Please try again.';
+      
+      if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        errorMessage = 'Google Play Services is not available on this device.';
+      } else if (err.code === statusCodes.NO_INTERNET) {
+        errorMessage = 'No internet connection. Please check your network and try again.';
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (!err.response && err.message !== 'Network Error') {
+        // Backend connection issue
+        errorMessage = 'Unable to connect to server. Please try again later.';
+      }
+      
+      showError(errorMessage);
     }
   }
 

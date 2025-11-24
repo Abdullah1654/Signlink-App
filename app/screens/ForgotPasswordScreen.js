@@ -93,7 +93,18 @@ export default function ForgotPasswordScreen({ navigation }) {
       Alert.alert("Success", "OTP sent to your email");
       navigation.navigate("ResetPassword", { email });
     } catch (err) {
-      Alert.alert("Error", err.response?.data?.error || err.message);
+      console.error('Forgot password error:', err);
+      let errorMessage = 'Unable to send OTP. Please try again.';
+      
+      if (err.response?.status === 404) {
+        errorMessage = 'No account found with this email address.';
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (!err.response) {
+        errorMessage = 'No internet connection. Please check your network and try again.';
+      }
+      
+      Alert.alert("OTP Request Failed", errorMessage);
     } finally {
       setIsLoading(false);
     }

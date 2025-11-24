@@ -9,6 +9,7 @@ import {
   Dimensions,
   ScrollView,
   Alert,
+  Modal,
 } from 'react-native';
 import uuid from 'react-native-uuid';
 import contactsService from '../utils/contactsService';
@@ -24,6 +25,8 @@ export default function ConversationScreen({ navigation, route }) {
   const [conversationMessages, setConversationMessages] = useState([]);
   const [groupedConversations, setGroupedConversations] = useState({});
   const [activeTab, setActiveTab] = useState('conversation'); // 'conversation' or 'calls'
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteCallData, setDeleteCallData] = useState(null);
   const { theme } = useTheme();
   const styles = createThemedStyles(getStyles)(theme);
 
@@ -34,63 +37,70 @@ export default function ConversationScreen({ navigation, route }) {
 
   const fetchCallHistory = async () => {
     try {
+      if (!contact || !contact.id) {
+        console.error('Invalid contact data');
+        return;
+      }
       const historyData = await contactsService.getCallHistoryWithContact(contact.id);
-      setCallHistory(historyData);
+      setCallHistory(historyData || []);
     } catch (error) {
       console.error('Error fetching call history:', error);
+      // Silently fail - user will see empty state
     }
   };
 
   const fetchConversationMessages = async () => {
     try {
+      if (!contact || !contact.id) {
+        console.error('Invalid contact data');
+        return;
+      }
       const messages = await conversationService.getConversationWithContact(contact.id);
-      setConversationMessages(messages);
+      setConversationMessages(messages || []);
       
       // Group messages by call
-      const grouped = conversationService.groupMessagesByCall(messages);
-      setGroupedConversations(grouped);
+      const grouped = conversationService.groupMessagesByCall(messages || []);
+      setGroupedConversations(grouped || {});
     } catch (error) {
       console.error('Error fetching conversation messages:', error);
+      Alert.alert('Connection Error', 'Unable to load conversation. Please check your internet connection and try again.');
     }
   };
 
   const handleDeleteCallMessages = (callLogId, callDate) => {
-    Alert.alert(
-      'Delete Messages',
-      `Are you sure you want to delete all messages from the call on ${callDate}? This action cannot be undone.`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await conversationService.deleteCallMessages(callLogId);
-              
-              // Remove the deleted call from grouped conversations
-              setGroupedConversations(prev => {
-                const updated = { ...prev };
-                delete updated[callLogId];
-                return updated;
-              });
-              
-              // Update conversation messages list
-              setConversationMessages(prev => 
-                prev.filter(message => message.callLogId !== callLogId)
-              );
-              
-              Alert.alert('Success', 'Messages deleted successfully');
-            } catch (error) {
-              console.error('Error deleting messages:', error);
-              Alert.alert('Error', 'Failed to delete messages. Please try again.');
-            }
-          },
-        },
-      ]
-    );
+    setDeleteCallData({ callLogId, callDate });
+    setShowDeleteModal(true);
+  };
+
+  const executeDeleteCallMessages = async () => {
+    if (!deleteCallData) return;
+
+    const { callLogId, callDate } = deleteCallData;
+
+    try {
+      await conversationService.deleteCallMessages(callLogId);
+      
+      // Remove the deleted call from grouped conversations
+      setGroupedConversations(prev => {
+        const updated = { ...prev };
+        delete updated[callLogId];
+        return updated;
+      });
+      
+      // Update conversation messages list
+      setConversationMessages(prev => 
+        prev.filter(message => message.callLogId !== callLogId)
+      );
+      
+      setShowDeleteModal(false);
+      setDeleteCallData(null);
+    } catch (error) {
+      console.error('Error deleting messages:', error);
+      setShowDeleteModal(false);
+      setDeleteCallData(null);
+      const errorMessage = error.response?.data?.error || 'Unable to delete messages. Please try again.';
+      Alert.alert('Delete Failed', errorMessage);
+    }
   };
 
   const initiateCall = () => {
@@ -367,6 +377,50 @@ export default function ConversationScreen({ navigation, route }) {
           <Text style={styles.mainCallText}>Start Video Call</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showDeleteModal}
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Delete Messages</Text>
+            </View>
+            
+            <View style={styles.modalBody}>
+              <Text style={styles.modalMessage}>
+                Are you sure you want to delete all messages from the call on {deleteCallData?.callDate}?
+              </Text>
+              <Text style={styles.modalWarning}>
+                This action cannot be undone.
+              </Text>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setDeleteCallData(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.deleteConfirmButton]}
+                onPress={executeDeleteCallMessages}
+              >
+                <Text style={styles.deleteConfirmButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -695,6 +749,80 @@ const getStyles = (theme) => StyleSheet.create({
   },
   otherMessageTime: {
     color: theme.colors.textSecondary,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.card,
+    borderRadius: 20,
+    width: width * 0.85,
+    maxWidth: 400,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  modalHeader: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: theme.colors.text,
+    textAlign: 'center',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: theme.colors.text,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  modalWarning: {
+    fontSize: 14,
+    color: '#EF4444',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    borderRightWidth: 1,
+    borderRightColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
+  deleteConfirmButton: {
+    backgroundColor: 'transparent',
+  },
+  deleteConfirmButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#EF4444',
   },
 });
 

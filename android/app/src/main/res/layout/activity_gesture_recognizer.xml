@@ -29,6 +29,7 @@
         android:backgroundTint="@color/mp_color_primary"
         android:contentDescription="Flip Camera"
         android:src="@android:drawable/ic_menu_camera"
+        app:tint="@android:color/white"
         app:useCompatPadding="true" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -41,6 +42,7 @@
         android:backgroundTint="@color/mp_color_primary"
         android:contentDescription="Start Speech Recognition"
         android:src="@android:drawable/ic_btn_speak_now"
+        app:tint="@android:color/white"
         app:useCompatPadding="true" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -53,6 +55,7 @@
         android:backgroundTint="@color/mp_color_primary"
         android:contentDescription="Return to Gesture Recognition"
         android:src="@android:drawable/ic_menu_revert"
+        app:tint="@android:color/white"
         android:visibility="gone"
         app:useCompatPadding="true" />
 

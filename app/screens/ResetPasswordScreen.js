@@ -71,6 +71,11 @@ export default function ResetPasswordScreen({ route, navigation }) {
       return;
     }
     
+    if (otp.trim().length !== 6 || !/^\d+$/.test(otp.trim())) {
+      setErrors({ otp: 'OTP must be a 6-digit number' });
+      return;
+    }
+    
     if (!newPassword) {
       setErrors({ newPassword: 'New password is required' });
       return;
@@ -89,10 +94,21 @@ export default function ResetPasswordScreen({ route, navigation }) {
     setIsLoading(true);
     try {
       await axios.post(`${API}/auth/reset-password`, { email, otp, newPassword });
-      Alert.alert("Success", "Password reset successful. Please log in.");
+      Alert.alert("Success", "Password reset successful. Please sign in with your new password.");
       navigation.replace("SignIn");
     } catch (err) {
-      Alert.alert("Error", err.response?.data?.error || err.message);
+      console.error('Reset password error:', err);
+      let errorMessage = 'Unable to reset password. Please try again.';
+      
+      if (err.response?.status === 400) {
+        errorMessage = 'Invalid or expired OTP. Please request a new one.';
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (!err.response) {
+        errorMessage = 'No internet connection. Please check your network and try again.';
+      }
+      
+      Alert.alert("Password Reset Failed", errorMessage);
     } finally {
       setIsLoading(false);
     }

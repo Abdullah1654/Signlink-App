@@ -20,7 +20,7 @@ class GestureRecognizerHelper(
     var minHandTrackingConfidence: Float = DEFAULT_HAND_TRACKING_CONFIDENCE,
     var minHandPresenceConfidence: Float = DEFAULT_HAND_PRESENCE_CONFIDENCE,
     var maxNumHands: Int = DEFAULT_NUM_HANDS,
-    var currentDelegate: Int = DELEGATE_CPU,
+    val currentDelegate: Int = DELEGATE_CPU, // Locked to CPU only
     var runningMode: RunningMode = RunningMode.IMAGE,
     val context: Context,
     val gestureRecognizerListener: GestureRecognizerListener? = null
@@ -32,16 +32,18 @@ class GestureRecognizerHelper(
     }
 
     fun clearGestureRecognizer() {
-        gestureRecognizer?.close()
-        gestureRecognizer = null
+        try {
+            gestureRecognizer?.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing gesture recognizer: ${e.message}")
+        } finally {
+            gestureRecognizer = null
+        }
     }
 
     fun setupGestureRecognizer() {
-        val baseOptionBuilder = BaseOptions.builder()
-        when (currentDelegate) {
-            DELEGATE_CPU -> baseOptionBuilder.setDelegate(Delegate.CPU)
-            DELEGATE_GPU -> baseOptionBuilder.setDelegate(Delegate.GPU)
-        }
+        // Always use CPU delegate
+        val baseOptionBuilder = BaseOptions.builder().setDelegate(Delegate.CPU)
         baseOptionBuilder.setModelAssetPath(MP_RECOGNIZER_TASK)
         when (runningMode) {
             RunningMode.LIVE_STREAM -> {
@@ -77,35 +79,62 @@ class GestureRecognizerHelper(
     }
 
     fun recognizeLiveStream(imageProxy: ImageProxy, cameraFacing: Int) {
-        val frameTime = SystemClock.uptimeMillis()
-        val bitmapBuffer = Bitmap.createBitmap(
-            imageProxy.width, imageProxy.height, Bitmap.Config.ARGB_8888
-        )
-        imageProxy.use { bitmapBuffer.copyPixelsFromBuffer(imageProxy.planes[0].buffer) }
-        imageProxy.close()
-        val matrix = Matrix().apply {
-            postRotate(imageProxy.imageInfo.rotationDegrees.toFloat())
-            if (cameraFacing == CameraSelector.LENS_FACING_FRONT) {
-                postScale(-1f, 1f, imageProxy.width.toFloat(), imageProxy.height.toFloat())
+        try {
+            if (gestureRecognizer == null) {
+                Log.w(TAG, "Gesture recognizer not initialized")
+                imageProxy.close()
+                return
+            }
+            
+            val frameTime = SystemClock.uptimeMillis()
+            val bitmapBuffer = Bitmap.createBitmap(
+                imageProxy.width, imageProxy.height, Bitmap.Config.ARGB_8888
+            )
+            imageProxy.use { bitmapBuffer.copyPixelsFromBuffer(imageProxy.planes[0].buffer) }
+            imageProxy.close()
+            
+            val matrix = Matrix().apply {
+                postRotate(imageProxy.imageInfo.rotationDegrees.toFloat())
+                if (cameraFacing == CameraSelector.LENS_FACING_FRONT) {
+                    postScale(-1f, 1f, imageProxy.width.toFloat(), imageProxy.height.toFloat())
+                }
+            }
+            
+            val rotatedBitmap = Bitmap.createBitmap(
+                bitmapBuffer, 0, 0, bitmapBuffer.width, bitmapBuffer.height, matrix, true
+            )
+            val mpImage = BitmapImageBuilder(rotatedBitmap).build()
+            recognizeAsync(mpImage, frameTime)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in recognizeLiveStream: ${e.message}")
+            try {
+                imageProxy.close()
+            } catch (closeError: Exception) {
+                Log.e(TAG, "Error closing image proxy: ${closeError.message}")
             }
         }
-        val rotatedBitmap = Bitmap.createBitmap(
-            bitmapBuffer, 0, 0, bitmapBuffer.width, bitmapBuffer.height, matrix, true
-        )
-        val mpImage = BitmapImageBuilder(rotatedBitmap).build()
-        recognizeAsync(mpImage, frameTime)
     }
 
     fun recognizeAsync(mpImage: MPImage, frameTime: Long) {
-        gestureRecognizer?.recognizeAsync(mpImage, frameTime)
+        try {
+            gestureRecognizer?.recognizeAsync(mpImage, frameTime)
+                ?: Log.w(TAG, "Cannot recognize: gesture recognizer is null")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in recognizeAsync: ${e.message}")
+        }
     }
 
     fun isClosed(): Boolean = gestureRecognizer == null
 
     private fun returnLivestreamResult(result: GestureRecognizerResult, input: MPImage) {
-        val finishTimeMs = SystemClock.uptimeMillis()
-        val inferenceTime = finishTimeMs - result.timestampMs()
-        gestureRecognizerListener?.onResults(ResultBundle(listOf(result), inferenceTime, input.height, input.width))
+        try {
+            val finishTimeMs = SystemClock.uptimeMillis()
+            val inferenceTime = finishTimeMs - result.timestampMs()
+            gestureRecognizerListener?.onResults(ResultBundle(listOf(result), inferenceTime, input.height, input.width))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing livestream result: ${e.message}")
+            gestureRecognizerListener?.onError("Error processing gesture results", OTHER_ERROR)
+        }
     }
 
     private fun returnLivestreamError(error: RuntimeException) {
