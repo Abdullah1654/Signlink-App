@@ -2,6 +2,14 @@
 #
 .DS_Store
 
+# SECURITY: API Keys and Secrets
+# Never commit API keys directly in code!
+# Use environment variables or secure configuration files
+.env
+.env.local
+config/secrets.js
+android/app/google-services.json
+
 # Xcode
 #
 build/

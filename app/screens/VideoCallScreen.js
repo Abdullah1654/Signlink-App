@@ -482,36 +482,27 @@ const VideoCallScreen = () => {
 
       console.log('🔧 Creating peer connection with TURN/STUN servers...');
       
-      // Configure ICE servers with custom TURN server and fallbacks
+      // Configure ICE servers - TURN-first for fast, reliable connections
       const iceServers = [
-        // Primary STUN server (custom EC2)
-        { urls: 'stun:13.61.128.117:3478' },
-        
-        // Primary TURN server with TCP transport (recommended for firewall traversal)
-        { 
-          urls: 'turn:13.61.128.117:3478?transport=tcp',
-          username: 'abdullah',
-          credential: '029Signoff'
-        },
-        
-        // Secondary TURN server with UDP transport (faster but may be blocked)
+        // TURN servers FIRST (higher priority) - works for both same and different networks
         { 
           urls: 'turn:13.61.128.117:3478?transport=udp',
           username: 'abdullah',
           credential: '029Signoff'
         },
-        
-        // Fallback public STUN servers
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
+        { 
+          urls: 'turn:13.61.128.117:3478?transport=tcp',
+          username: 'abdullah',
+          credential: '029Signoff'
+        },
       ];
 
-      console.log('📡 ICE Servers configured:', JSON.stringify(iceServers, null, 2));
+      console.log('📡 ICE Servers configured (TURN-only for reliability):', JSON.stringify(iceServers, null, 2));
 
       peerConnection.current = new RTCPeerConnection({
         iceServers,
         iceCandidatePoolSize: 10,
-        iceTransportPolicy: 'all', // Try all: host → STUN → TURN (best chance of connection)
+        iceTransportPolicy: 'relay', // TURN-only: fast, works for all network types
         bundlePolicy: 'max-bundle',
         rtcpMuxPolicy: 'require',
         // Add longer timeout for ICE gathering (30 seconds)
@@ -519,7 +510,7 @@ const VideoCallScreen = () => {
       });
       
       console.log('✅ Peer connection created successfully');
-      console.log('🔧 ICE Configuration: transport=all, gathering timeout=30s');
+      console.log('🔧 ICE Configuration: TURN-only relay for instant connection');
 
       // Create a data channel for connection keepalive
       try {

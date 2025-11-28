@@ -38,6 +38,7 @@ export default function ProfileScreen({ navigation }) {
   const [updating, setUpdating] = useState(false);
   const [imagePickerVisible, setImagePickerVisible] = useState(false);
   const [deletePhotoModalVisible, setDeletePhotoModalVisible] = useState(false);
+  const [deleteAccountModalVisible, setDeleteAccountModalVisible] = useState(false);
   const { showSuccess, showError } = useToast();
   const { theme, isDark, toggleTheme } = useTheme();
   const styles = createThemedStyles(getStyles)(theme);
@@ -202,39 +203,12 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your account? This action cannot be undone and will permanently remove all your data.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: confirmDeleteAccount,
-        },
-      ]
-    );
+    setDeleteAccountModalVisible(true);
   };
 
   const confirmDeleteAccount = () => {
-    Alert.alert(
-      'Final Confirmation',
-      'This is your last chance. Are you absolutely sure you want to delete your account?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Yes, Delete Forever',
-          style: 'destructive',
-          onPress: executeDeleteAccount,
-        },
-      ]
-    );
+    setDeleteAccountModalVisible(false);
+    executeDeleteAccount();
   };
 
   const executeDeleteAccount = async () => {
@@ -622,6 +596,44 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        visible={deleteAccountModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDeleteAccountModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <View style={[styles.deleteModalIconContainer, styles.deleteAccountIconContainer]}>
+              <Text style={styles.deleteModalIcon}>⚠️</Text>
+            </View>
+            <Text style={styles.deleteModalTitle}>Delete Account</Text>
+            <Text style={styles.deleteModalMessage}>
+              Are you sure you want to delete your account? This action cannot be undone and will permanently remove all your data.
+            </Text>
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteModalCancelButton]}
+                onPress={() => setDeleteAccountModalVisible(false)}
+                disabled={deleting}
+              >
+                <Text style={styles.deleteModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteModalDeleteButton]}
+                onPress={confirmDeleteAccount}
+                disabled={deleting}
+              >
+                <Text style={styles.deleteModalDeleteText}>
+                  {deleting ? 'Deleting...' : 'Delete Forever'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -997,11 +1009,13 @@ const getStyles = (theme) => StyleSheet.create({
   },
   deleteModalButton: {
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 15,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 0,
+    height: 44,
   },
   deleteModalCancelButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -1013,13 +1027,17 @@ const getStyles = (theme) => StyleSheet.create({
   },
   deleteModalCancelText: {
     color: theme.colors.text,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   deleteModalDeleteText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
+    whiteSpace: 'nowrap',
+  },
+  deleteAccountIconContainer: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
   },
 });
 

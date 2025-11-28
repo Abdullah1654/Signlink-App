@@ -14,6 +14,7 @@ import {
   ScrollView,
   RefreshControl,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { launchCamera } from 'react-native-image-picker';
 import contactsService from '../utils/contactsService';
 import socketService from '../utils/socketService';
@@ -42,6 +43,7 @@ export default function ContactsListScreen({ navigation }) {
   const [sortByRecents, setSortByRecents] = useState(false); // controls recent sorting
     const [recentCallTimes, setRecentCallTimes] = useState({}); // contactId -> most recent call time
   const searchTimeoutRef = useRef(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const { showSuccess, showError } = useToast();
   const { theme } = useTheme();
   const styles = createThemedStyles(getStyles)(theme);
@@ -204,6 +206,20 @@ export default function ContactsListScreen({ navigation }) {
     setContactToDelete(null);
   };
 
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('userToken');
+      setShowProfileModal(false);
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'SignIn' }],
+      });
+    } catch (error) {
+      console.error('Error logging out:', error);
+      showError('Failed to log out');
+    }
+  };
+
   const openCamera = () => {
     const options = {
       mediaType: 'photo',
@@ -338,7 +354,7 @@ export default function ContactsListScreen({ navigation }) {
         <Text style={styles.headerTitle}>Messages</Text>
         <TouchableOpacity 
           style={styles.profileButton}
-          onPress={() => navigation.navigate('Profile')}
+          onPress={() => setShowProfileModal(true)}
         >
           <View style={styles.profileImageContainer}>
             {renderCurrentUserProfilePicture()}
@@ -592,6 +608,91 @@ export default function ContactsListScreen({ navigation }) {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* Profile Modal */}
+      <Modal
+        visible={showProfileModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowProfileModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.profileModalOverlay} 
+          activeOpacity={1}
+          onPress={() => setShowProfileModal(false)}
+        >
+          <View style={styles.profileModalContainer}>
+            <TouchableOpacity 
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <View style={styles.profileModalHeader}>
+                <Text style={styles.profileModalTitle}>Messages</Text>
+                <TouchableOpacity 
+                  onPress={() => setShowProfileModal(false)}
+                  style={styles.closeButton}
+                >
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Profile Info */}
+              <View style={styles.profileInfoSection}>
+                <View style={styles.profilePicContainer}>
+                  {currentUser?.photo ? (
+                    <Image
+                      source={getCurrentUserImageSource()}
+                      style={styles.profileModalImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.profileModalDefaultImage}>
+                      <Text style={styles.profileModalDefaultImageText}>
+                        {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.profileModalName}>
+                  {currentUser?.name || 'Your name'}
+                </Text>
+                <Text style={styles.profileModalEmail}>
+                  {currentUser?.email || 'yourname@gmail.com'}
+                </Text>
+              </View>
+
+              {/* My Profile Button */}
+              <TouchableOpacity 
+                style={styles.profileMenuItem}
+                onPress={() => {
+                  setShowProfileModal(false);
+                  navigation.navigate('Profile');
+                }}
+              >
+                <View style={styles.profileMenuItemLeft}>
+                  <View style={styles.profileMenuIconCircle}>
+                    <Text style={styles.profileMenuIconText}>👤</Text>
+                  </View>
+                  <Text style={styles.profileMenuItemText}>My Profile</Text>
+                </View>
+                <Text style={styles.arrowIconText}>›</Text>
+              </TouchableOpacity>
+
+              {/* Log Out Button */}
+              <TouchableOpacity 
+                style={styles.logoutMenuItem}
+                onPress={handleLogout}
+              >
+                <View style={styles.logoutIconCircle}>
+                  <Text style={styles.logoutIconText}>⎋</Text>
+                </View>
+                <Text style={styles.logoutText}>Log Out</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* Shared Bottom Navigation */}
@@ -983,5 +1084,171 @@ const getStyles = (theme) => StyleSheet.create({
   suggestionEmail: {
     fontSize: 14,
     color: '#9CA3AF',
+  },
+  // Profile Modal Styles
+  profileModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: 50,
+    paddingHorizontal: 20,
+  },
+  profileModalContainer: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#1F1F1F',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  profileModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  profileModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#F9FAFB',
+  },
+  closeButton: {
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 15,
+    backgroundColor: '#7C01F6',
+  },
+  closeButtonText: {
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  profileInfoSection: {
+    alignItems: 'center',
+    marginBottom: 25,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2D2D2D',
+  },
+  profilePicContainer: {
+    marginBottom: 15,
+  },
+  profileModalImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: '#7C01F6',
+  },
+  profileModalDefaultImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#7C01F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#8B5CF6',
+  },
+  profileModalDefaultImageText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  profileModalName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#F9FAFB',
+    marginBottom: 5,
+  },
+  profileModalEmail: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  profileMenuItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 12,
+    backgroundColor: '#2D2D2D',
+    borderRadius: 12,
+    marginBottom: 12,
+    height: 56,
+  },
+  profileMenuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profileMenuIconCircle: {
+    width: 22,
+    height: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  profileMenuIconText: {
+    fontSize: 18,
+    color: '#F9FAFB',
+  },
+  profileMenuIcon: {
+    width: 22,
+    height: 22,
+    tintColor: '#F9FAFB',
+    marginRight: 12,
+  },
+  profileMenuItemText: {
+    fontSize: 16,
+    color: '#F9FAFB',
+    fontWeight: '500',
+  },
+  arrowIconText: {
+    fontSize: 30,
+    color: '#9CA3AF',
+    fontWeight: '400',
+    lineHeight: 20,
+  },
+  arrowIcon: {
+    width: 18,
+    height: 18,
+    tintColor: '#9CA3AF',
+  },
+  logoutMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 12,
+    backgroundColor: '#2D2D2D',
+    borderRadius: 12,
+    height: 56,
+  },
+  logoutIconCircle: {
+    width: 22,
+    height: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  logoutIconText: {
+    fontSize: 18,
+    color: '#EF4444',
+  },
+  logoutIcon: {
+    width: 22,
+    height: 22,
+    tintColor: '#EF4444',
+    marginRight: 12,
+  },
+  logoutText: {
+    fontSize: 16,
+    color: '#EF4444',
+    fontWeight: '500',
   },
 });

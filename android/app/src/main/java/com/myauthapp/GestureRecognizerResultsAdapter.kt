@@ -13,7 +13,8 @@ import com.myauthapp.databinding.ItemGestureRecognizerResultBinding
 
 class GestureRecognizerResultsAdapter(private val context: Context) : RecyclerView.Adapter<GestureRecognizerResultsAdapter.ViewHolder>() {
     // Gemini API key (keep this secure in production)
-    private val GEMINI_API_KEY = "AIzaSyAYQWM3Sjvip1h2VcViEj_qsn6-hQp0zHg"
+    // TODO: Replace with your NEW API key from https://aistudio.google.com/apikey
+    private val GEMINI_API_KEY = "AIzaSyBi-M2Rkbm68E9Xn54GQIUyQpHazU5fxhI"
     // Default model the user prefers
     private val GEMINI_MODEL_PRIMARY = "gemini-2.0-flash"
     // Fallback for broader availability

@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 // Gemini API configuration - matching the Android implementation
-const GEMINI_API_KEY = 'AIzaSyAYQWM3Sjvip1h2VcViEj_qsn6-hQp0zHg';
+// TODO: Replace with your NEW API key from https://aistudio.google.com/apikey
+const GEMINI_API_KEY = 'AIzaSyBi-M2Rkbm68E9Xn54GQIUyQpHazU5fxhI';
 const GEMINI_MODEL_PRIMARY = 'gemini-2.0-flash';
 const GEMINI_MODEL_FALLBACK = 'gemini-2.5-flash-lite';
 
